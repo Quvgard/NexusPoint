@@ -1,0 +1,80 @@
+﻿<Window x:Class="NexusPoint.Windows.PrintDocumentsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NexusPoint.Windows"
+        xmlns:converters="clr-namespace:NexusPoint.Utils.Converters"
+        mc:Ignorable="d"
+        Title="Печать документов" Height="500" Width="700"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded">
+    <!-- Ресурсы окна -->
+    <Window.Resources>
+        <!-- Конвертер для отображения "Продажа" / "Возврат" -->
+        <converters:BooleanToSaleReturnConverter x:Key="BooleanToSaleReturnConverter"/>
+    </Window.Resources>
+    
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Поиск -->
+            <RowDefinition Height="*"/>
+            <!-- Результаты поиска / Информация -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопки действий -->
+            <RowDefinition Height="Auto"/>
+            <!-- Статус -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопка Закрыть -->
+        </Grid.RowDefinitions>
+
+        <!-- Панель поиска -->
+        <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <Label Content="Номер чека:" VerticalAlignment="Center"/>
+                <TextBox x:Name="CheckNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <Label Content="Номер смены:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <Button x:Name="FindCheckButton" Content="Найти чек" Width="100" Margin="15,0,5,0" Click="FindCheckButton_Click"/>
+                <Button x:Name="PrintLastCheckCopyButton" Content="Копия последнего" Width="120" Margin="0,0,0,0" Click="PrintLastCheckCopyButton_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Результаты поиска / Информация о чеке -->
+        <GroupBox Grid.Row="1" Header="Найденный чек / Последний чек" Margin="0,0,0,10">
+            <ListView x:Name="ChecksListView" SelectionMode="Single">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="ID Чека" DisplayMemberBinding="{Binding CheckId}" Width="70"/>
+                        <GridViewColumn Header="№ Чека" DisplayMemberBinding="{Binding CheckNumber}" Width="70"/>
+                        <GridViewColumn Header="№ Смены" DisplayMemberBinding="{Binding Shift.ShiftNumber}" Width="70"/>
+                        <!-- Потребует загрузки смены -->
+                        <GridViewColumn Header="Тип" DisplayMemberBinding="{Binding IsReturn, Converter={StaticResource BooleanToSaleReturnConverter}}" Width="80"/>
+                        <!-- Потребует конвертер -->
+                        <GridViewColumn Header="Дата и время" DisplayMemberBinding="{Binding Timestamp, StringFormat='g'}" Width="130"/>
+                        <GridViewColumn Header="Сумма" DisplayMemberBinding="{Binding TotalAmount, StringFormat=C}" Width="100"/>
+                        <GridViewColumn Header="Кассир" DisplayMemberBinding="{Binding Cashier.FullName}"/>
+                        <!-- Потребует загрузки кассира -->
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </GroupBox>
+
+        <!-- Кнопки действий для выбранного чека -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" x:Name="ActionPanel" Margin="0,0,0,10">
+            <Button x:Name="PrintCopyButton" Content="Печать копии" Width="120" Margin="0,0,10,0" Click="PrintCopyButton_Click" IsEnabled="False"/>
+            <Button x:Name="PrintTovarnyCheckButton" Content="Печать товарного чека" Width="160" Margin="0,0,10,0" Click="PrintTovarnyCheckButton_Click" IsEnabled="False"/>
+            <Button x:Name="PrintDiscountDetailsButton" Content="Печать скидок" Width="120" Click="PrintDiscountDetailsButton_Click" IsEnabled="False"/>
+        </StackPanel>
+
+        <!-- Статус -->
+        <TextBlock Grid.Row="3" x:Name="StatusText" Foreground="Red" Margin="0,5"/>
+
+        <!-- Кнопка Закрыть -->
+        <Button Grid.Row="4" Content="Закрыть" Width="100" Height="30" HorizontalAlignment="Right" IsCancel="True"/>
+
+    </Grid>
+
+</Window>

@@ -171,5 +171,14 @@ namespace NexusPoint.Data.Repositories
                 return connection.Query<Shift>(query, new { Start = startDate, End = endDate });
             }
         }
+
+        public IEnumerable<Shift> GetShiftsByIds(IEnumerable<int> shiftIds)
+        {
+            if (shiftIds == null || !shiftIds.Any()) return Enumerable.Empty<Shift>();
+            using (var connection = DatabaseHelper.GetConnection())
+            {
+                return connection.Query<Shift>("SELECT * FROM Shifts WHERE ShiftId IN @Ids", new { Ids = shiftIds });
+            }
+        }
     }
 }

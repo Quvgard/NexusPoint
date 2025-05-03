@@ -84,6 +84,17 @@ namespace NexusPoint.Data.Repositories
             }
         }
 
+        // Получить все записи остатков
+        public IEnumerable<StockItem> GetAllStockItems()
+        {
+            using (var connection = DatabaseHelper.GetConnection())
+            {
+                // Просто выбираем все записи из таблицы остатков
+                string query = "SELECT * FROM StockItems";
+                return connection.Query<StockItem>(query);
+            }
+        }
+
         // Установить точное значение остатка (для инвентаризации)
         public bool SetStockQuantity(int productId, decimal newQuantity)
         {

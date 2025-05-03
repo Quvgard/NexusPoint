@@ -91,6 +91,23 @@ namespace NexusPoint.Data.Repositories
             }
         }
 
+        // Получить товары по списку их ID
+        public IEnumerable<Product> GetProductsByIds(IEnumerable<int> productIds)
+        {
+            // Если список ID пуст, возвращаем пустую коллекцию, чтобы избежать ошибки в SQL IN ()
+            if (productIds == null || !productIds.Any())
+            {
+                return Enumerable.Empty<Product>();
+            }
+
+            using (var connection = DatabaseHelper.GetConnection())
+            {
+                // Используем параметр Dapper для передачи списка ID в оператор IN
+                string query = "SELECT * FROM Products WHERE ProductId IN @Ids";
+                return connection.Query<Product>(query, new { Ids = productIds });
+            }
+        }
+
         // Обновить товар (остатки не трогаем здесь, только каталог)
         public bool UpdateProduct(Product product)
         {

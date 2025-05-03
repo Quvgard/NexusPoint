@@ -181,5 +181,20 @@ namespace NexusPoint.Data.Repositories
                 return check;
             }
         }
+
+        public Check GetLastCheck()
+        {
+            using (var connection = DatabaseHelper.GetConnection())
+            {
+                // Получаем самый последний чек по ID
+                var check = connection.QueryFirstOrDefault<Check>("SELECT * FROM Checks ORDER BY CheckId DESC LIMIT 1");
+                if (check != null)
+                {
+                    // Дозагружаем позиции
+                    check.Items = GetCheckItemsByCheckId(check.CheckId, connection);
+                }
+                return check;
+            }
+        }
     }
 }

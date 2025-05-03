@@ -150,7 +150,7 @@ namespace NexusPoint.Data
 
                     // Здесь можно добавить создание начальных данных, если нужно
                     // Например, пользователя Admin
-                    // CreateDefaultAdminUser(connection);
+                    CreateDefaultAdminUser(connection);
 
                 }
                 catch (Exception ex) // Ловим более общее исключение
@@ -168,28 +168,43 @@ namespace NexusPoint.Data
         // Пример добавления админа по умолчанию (вызывать из CreateTables, если нужно)
         private static void CreateDefaultAdminUser(SQLiteConnection connection)
         {
-            // Проверить, существует ли уже админ
-            var adminExists = connection.QueryFirstOrDefault<int>(
-                "SELECT COUNT(*) FROM Users WHERE Username = @Username", new { Username = "admin" });
+            // Проверить, существует ли уже хоть один пользователь (или конкретно admin)
+            var userExists = connection.QueryFirstOrDefault<int>(
+                "SELECT COUNT(*) FROM Users WHERE Username = @Username", new { Username = "admin" }); // Ищем конкретно admin
 
-            if (adminExists == 0)
+            if (userExists == 0)
             {
-                // Важно: Используйте безопасное хеширование паролей!
-                // Это ПРОСТОЙ ПРИМЕР, НЕ ИСПОЛЬЗУЙТЕ В ПРОДАШКЕНЕ!
-                // Замените на вызов вашего PasswordHasher.cs
-                string hashedPassword = Utils.PasswordHasher.HashPassword("admin"); // Предполагается, что у вас есть такой класс/метод
+                // Проверяем, существует ли вообще класс PasswordHasher
+                if (typeof(Utils.PasswordHasher).GetMethod("HashPassword") == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("ERROR: PasswordHasher.HashPassword method not found. Cannot create default user.");
+                    // Можно показать MessageBox или просто пропустить создание
+                    MessageBox.Show("Не найден метод хеширования пароля. Пользователь по умолчанию не создан.", "Ошибка инициализации", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return; // Выходим, не создавая пользователя
+                }
+
+                string defaultUsername = "admin";
+                string defaultPassword = "admin"; // Используйте более сложный, если хотите
+                string hashedPassword = Utils.PasswordHasher.HashPassword(defaultPassword);
 
                 connection.Execute(@"
                 INSERT INTO Users (Username, HashedPassword, FullName, Role)
                 VALUES (@Username, @HashedPassword, @FullName, @Role);",
                     new
                     {
-                        Username = "admin",
+                        Username = defaultUsername,
                         HashedPassword = hashedPassword,
-                        FullName = "Администратор",
-                        Role = "Admin"
+                        FullName = "Администратор Системы",
+                        Role = "Admin" // Даем роль Admin
                     });
-                System.Diagnostics.Debug.WriteLine("Default admin user created.");
+                System.Diagnostics.Debug.WriteLine($"Default admin user created (Username: {defaultUsername}, Password: {defaultPassword}).");
+                // Можно вывести сообщение пользователю о создании учетки
+                MessageBox.Show($"Создана учетная запись администратора по умолчанию:\nЛогин: {defaultUsername}\nПароль: {defaultPassword}\n\nРекомендуется сменить пароль после первого входа.",
+                                "Пользователь по умолчанию", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("Admin user already exists or other users found.");
             }
         }
     }

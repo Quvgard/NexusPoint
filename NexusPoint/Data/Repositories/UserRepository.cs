@@ -91,5 +91,14 @@ namespace NexusPoint.Data.Repositories
                 return connection.Execute(query, new { Id = userId }) > 0;
             }
         }
+
+        public IEnumerable<User> GetUsersByIds(IEnumerable<int> userIds)
+        {
+            if (userIds == null || !userIds.Any()) return Enumerable.Empty<User>();
+            using (var connection = DatabaseHelper.GetConnection())
+            {
+                return connection.Query<User>("SELECT * FROM Users WHERE UserId IN @Ids", new { Ids = userIds });
+            }
+        }
     }
 }

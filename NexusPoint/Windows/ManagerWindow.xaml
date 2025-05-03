@@ -1,0 +1,185 @@
+﻿<Window x:Class="NexusPoint.Windows.ManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NexusPoint.Windows"
+        mc:Ignorable="d"
+        Title="NexusPoint - Управление" Height="600" Width="900"
+        WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0" Margin="5">
+
+            <!-- Вкладка Товары (Каталог) -->
+            <TabItem Header="Товары (Каталог)">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- Поиск/Фильтр -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- Кнопки действий -->
+                        <RowDefinition Height="*"/>
+                        <!-- Список товаров -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Панель поиска -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
+                        <Label Content="Поиск по названию:" VerticalAlignment="Center"/>
+                        <TextBox x:Name="ProductSearchTextBox" Width="200" Margin="5,0" VerticalContentAlignment="Center"/>
+                        <Button Content="Найти" Width="80" Margin="5,0" Click="SearchProductButton_Click"/>
+                        <Button Content="Сбросить" Width="80" Click="ResetProductSearchButton_Click"/>
+                    </StackPanel>
+
+                    <!-- Кнопки действий для товаров -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,5">
+                        <Button Content="Добавить товар" Width="120" Margin="0,0,5,0" Click="AddProductButton_Click"/>
+                        <Button Content="Редактировать" Width="100" Margin="0,0,5,0" Click="EditProductButton_Click"/>
+                        <Button Content="Удалить" Width="100" Margin="0,0,5,0" Click="DeleteProductButton_Click"/>
+                        <Button Content="Обновить список" Width="120" Click="RefreshProductsButton_Click"/>
+                    </StackPanel>
+
+                    <!-- Список товаров -->
+                    <DataGrid Grid.Row="2" x:Name="ProductsDataGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              SelectionMode="Single" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Код (САП)" Binding="{Binding ProductCode}" Width="100"/>
+                            <DataGridTextColumn Header="Наименование" Binding="{Binding Name}" Width="*"/>
+                            <DataGridTextColumn Header="Штрих-код" Binding="{Binding Barcode}" Width="130"/>
+                            <DataGridTextColumn Header="Цена" Binding="{Binding Price, StringFormat=C}" Width="80"/>
+                            <DataGridCheckBoxColumn Header="Марк." Binding="{Binding IsMarked}" Width="50"/>
+                            <DataGridTextColumn Header="ID" Binding="{Binding ProductId}" Width="50"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Остатки -->
+            <TabItem Header="Остатки">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- Поиск/Фильтр -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- Кнопки действий -->
+                        <RowDefinition Height="*"/>
+                        <!-- Список остатков -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Панель поиска (можно искать по ProductId, Коду или Названию) -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
+                        <Label Content="Поиск товара:" VerticalAlignment="Center"/>
+                        <TextBox x:Name="StockSearchTextBox" Width="200" Margin="5,0" VerticalContentAlignment="Center"/>
+                        <Button Content="Найти" Width="80" Margin="5,0" Click="SearchStockButton_Click"/>
+                        <Button Content="Сбросить" Width="80" Click="ResetStockSearchButton_Click"/>
+                    </StackPanel>
+
+                    <!-- Кнопки действий для остатков -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,5">
+                        <Button Content="Приемка/Корректировка" Width="180" Margin="0,0,5,0" Click="AdjustStockButton_Click"/>
+                        <!-- Можно добавить кнопки для инвентаризации и т.д. -->
+                        <Button Content="Обновить список" Width="120" Click="RefreshStockButton_Click"/>
+                    </StackPanel>
+
+                    <!-- Список остатков -->
+                    <DataGrid Grid.Row="2" x:Name="StockDataGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              SelectionMode="Single" CanUserAddRows="False">
+                        <!-- Для отображения Названия товара нужен JOIN или доп. модель -->
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ID Товара" Binding="{Binding ProductId}" Width="80"/>
+                            <!-- <DataGridTextColumn Header="Наименование" Binding="{Binding Product.Name}" Width="*"/> -->
+                            <!-- Так не сработает без доп. логики -->
+                            <DataGridTextColumn Header="Количество" Binding="{Binding Quantity}" Width="100"/>
+                            <DataGridTextColumn Header="Обновлено" Binding="{Binding LastUpdated, StringFormat='dd.MM.yyyy HH:mm'}" Width="140"/>
+                            <DataGridTextColumn Header="ID Остатка" Binding="{Binding StockItemId}" Width="80"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Пользователи -->
+            <TabItem Header="Пользователи">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- Кнопки действий -->
+                        <RowDefinition Height="*"/>
+                        <!-- Список пользователей -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Кнопки действий для пользователей -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,5">
+                        <Button Content="Добавить пользователя" Width="150" Margin="0,0,5,0" Click="AddUserButton_Click"/>
+                        <Button Content="Редактировать" Width="100" Margin="0,0,5,0" Click="EditUserButton_Click"/>
+                        <Button Content="Сбросить пароль" Width="120" Margin="0,0,5,0" Click="ResetUserPasswordButton_Click"/>
+                        <Button Content="Удалить" Width="100" Margin="0,0,5,0" Click="DeleteUserButton_Click"/>
+                        <Button Content="Обновить список" Width="120" Click="RefreshUsersButton_Click"/>
+                    </StackPanel>
+
+                    <!-- Список пользователей -->
+                    <DataGrid Grid.Row="1" x:Name="UsersDataGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              SelectionMode="Single" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Логин (ШК)" Binding="{Binding Username}" Width="150"/>
+                            <DataGridTextColumn Header="ФИО" Binding="{Binding FullName}" Width="*"/>
+                            <DataGridTextColumn Header="Роль" Binding="{Binding Role}" Width="100"/>
+                            <DataGridTextColumn Header="ID" Binding="{Binding UserId}" Width="50"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Акции/Скидки -->
+            <TabItem Header="Акции и Скидки">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- Кнопки действий -->
+                        <RowDefinition Height="*"/>
+                        <!-- Список акций -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Кнопки действий для акций -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,5">
+                        <Button Content="Добавить акцию" Width="120" Margin="0,0,5,0" Click="AddDiscountButton_Click"/>
+                        <Button Content="Редактировать" Width="100" Margin="0,0,5,0" Click="EditDiscountButton_Click"/>
+                        <Button Content="Удалить" Width="100" Margin="0,0,5,0" Click="DeleteDiscountButton_Click"/>
+                        <Button Content="Обновить список" Width="120" Click="RefreshDiscountsButton_Click"/>
+                    </StackPanel>
+
+                    <!-- Список акций -->
+                    <DataGrid Grid.Row="1" x:Name="DiscountsDataGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              SelectionMode="Single" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Название" Binding="{Binding Name}" Width="*"/>
+                            <DataGridTextColumn Header="Тип" Binding="{Binding Type}" Width="100"/>
+                            <DataGridTextColumn Header="Значение" Binding="{Binding Value}" Width="80"/>
+                            <DataGridTextColumn Header="Начало" Binding="{Binding StartDate, StringFormat='dd.MM.yyyy'}" Width="100"/>
+                            <DataGridTextColumn Header="Конец" Binding="{Binding EndDate, StringFormat='dd.MM.yyyy'}" Width="100"/>
+                            <DataGridCheckBoxColumn Header="Активна" Binding="{Binding IsActive}" Width="60"/>
+                            <DataGridTextColumn Header="ID" Binding="{Binding DiscountId}" Width="50"/>
+                            <!-- Можно добавить колонки для RequiredProductId, GiftProductId -->
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Сюда можно добавить вкладки для Отчетов, Смен и т.д. -->
+
+        </TabControl>
+
+        <!-- Строка состояния -->
+        <StatusBar Grid.Row="1">
+            <StatusBarItem>
+                <TextBlock x:Name="UserInfoStatusBarText" Text="Пользователь: "/>
+            </StatusBarItem>
+            <!-- Можно добавить другие элементы в статус бар -->
+        </StatusBar>
+
+    </Grid>
+</Window>

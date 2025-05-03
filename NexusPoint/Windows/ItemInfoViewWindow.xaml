@@ -1,0 +1,87 @@
+﻿<Window x:Class="NexusPoint.Windows.ItemInfoViewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NexusPoint.Windows"
+        mc:Ignorable="d"
+        Title="Информация о товаре" Height="450" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Поиск -->
+            <RowDefinition Height="*"/>
+            <!-- Информация о товаре -->
+            <RowDefinition Height="Auto"/>
+            <!-- Статус/Ошибка -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопка Закрыть -->
+        </Grid.RowDefinitions>
+
+        <!-- Панель поиска -->
+        <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <Label Content="Код/ШК товара:" VerticalAlignment="Center"/>
+                <TextBox x:Name="ItemInputTextBox" Width="250" Margin="5,0" Height="25" VerticalContentAlignment="Center"
+                         KeyDown="ItemInputTextBox_KeyDown"/>
+                <Button x:Name="FindItemButton" Content="Найти" Width="80" Margin="5,0,0,0" Click="FindItemButton_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Область информации о товаре -->
+        <Border Grid.Row="1" BorderBrush="LightGray" BorderThickness="1" Padding="10" Background="WhiteSmoke">
+            <Grid x:Name="ItemInfoGrid" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- Заголовки -->
+                    <ColumnDefinition Width="*"/>
+                    <!-- Значения -->
+                </Grid.ColumnDefinitions>
+
+                <!-- Наименование -->
+                <Label Grid.Row="0" Grid.Column="0" Content="Наименование:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ItemNameText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="5,3"/>
+
+                <!-- Код (САП) -->
+                <Label Grid.Row="1" Grid.Column="0" Content="Код (САП):" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ItemCodeText" VerticalAlignment="Center" Margin="5,3"/>
+
+                <!-- Штрих-код -->
+                <Label Grid.Row="2" Grid.Column="0" Content="Штрих-код:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ItemBarcodeText" VerticalAlignment="Center" Margin="5,3"/>
+
+                <!-- Цена -->
+                <Label Grid.Row="3" Grid.Column="0" Content="Цена:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ItemPriceText" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="5,3"/>
+
+                <!-- Остаток -->
+                <Label Grid.Row="4" Grid.Column="0" Content="Остаток на складе:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="ItemStockText" VerticalAlignment="Center" Margin="5,3"/>
+
+                <!-- Маркировка -->
+                <Label Grid.Row="5" Grid.Column="0" Content="Маркированный:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="ItemMarkedText" VerticalAlignment="Center" Margin="5,3"/>
+
+            </Grid>
+        </Border>
+
+        <!-- Статус / Ошибка -->
+        <TextBlock Grid.Row="2" x:Name="StatusText" Foreground="Red" Margin="0,10,0,5"/>
+
+        <!-- Кнопка Закрыть -->
+        <Button Grid.Row="3" Content="Закрыть" Width="100" Height="30" HorizontalAlignment="Right" IsCancel="True"/>
+
+    </Grid>
+</Window>
