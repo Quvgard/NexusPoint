@@ -1,8 +1,433 @@
 ﻿<Application x:Class="NexusPoint.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:NexusPoint">
+             xmlns:local="clr-namespace:NexusPoint"
+             xmlns:System="clr-namespace:System;assembly=mscorlib">
+    
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Можно выносить стили в отдельные файлы, но для начала соберем здесь -->
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Цветовая палитра (подбираем похожие цвета) -->
+            <SolidColorBrush x:Key="PrimaryBackgroundBrush" Color="#F8F9FA"/>
+            <!-- Очень светлый фон окна -->
+            <SolidColorBrush x:Key="SecondaryBackgroundBrush" Color="#FFFFFF"/>
+            <!-- Белый фон для элементов -->
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#E8F0F7"/>
+            <!-- Фон "карточек" (голубоватый) -->
+            <SolidColorBrush x:Key="BorderBrush" Color="#DEE2E6"/>
+            <!-- Цвет границ -->
+            <SolidColorBrush x:Key="LightBorderBrush" Color="#E9ECEF"/>
+            <!-- Более светлая граница -->
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#212529"/>
+            <!-- Основной цвет текста (темно-серый) -->
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6C757D"/>
+            <!-- Вторичный цвет текста (серый) -->
+            <SolidColorBrush x:Key="DisabledForegroundBrush" Color="#ADB5BD"/>
+            <!-- Цвет текста неактивных элементов -->
+            <SolidColorBrush x:Key="DisabledBackgroundBrush" Color="#E9ECEF"/>
+            <!-- Фон неактивных элементов -->
+            <SolidColorBrush x:Key="DisabledBorderBrush" Color="#DEE2E6"/>
+            <!-- Граница неактивных элементов -->
+
+            <SolidColorBrush x:Key="ButtonDefaultBackgroundBrush" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="ButtonDefaultBorderBrush" Color="#CED4DA"/>
+            <SolidColorBrush x:Key="ButtonDefaultHoverBackgroundBrush" Color="#F8F9FA"/>
+            <SolidColorBrush x:Key="ButtonDefaultHoverBorderBrush" Color="#ADB5BD"/>
+            <SolidColorBrush x:Key="ButtonDefaultPressedBackgroundBrush" Color="#E9ECEF"/>
+            <SolidColorBrush x:Key="ButtonDefaultPressedBorderBrush" Color="#6C757D"/>
+
+            <SolidColorBrush x:Key="ButtonPrimaryBackgroundBrush" Color="#3498DB"/>
+            <!-- Синий акцентный (похожий на скриншот) -->
+            <SolidColorBrush x:Key="ButtonPrimaryBorderBrush" Color="#3498DB"/>
+            <SolidColorBrush x:Key="ButtonPrimaryHoverBackgroundBrush" Color="#2980B9"/>
+            <!-- Темнее синий -->
+            <SolidColorBrush x:Key="ButtonPrimaryHoverBorderBrush" Color="#2980B9"/>
+            <SolidColorBrush x:Key="ButtonPrimaryPressedBackgroundBrush" Color="#2471A3"/>
+            <!-- Еще темнее синий -->
+            <SolidColorBrush x:Key="ButtonPrimaryPressedBorderBrush" Color="#2471A3"/>
+            <SolidColorBrush x:Key="ButtonPrimaryForegroundBrush" Color="#FFFFFF"/>
+            <!-- Белый текст на синем -->
+
+            <SolidColorBrush x:Key="ButtonDangerBackgroundBrush" Color="#E74C3C"/>
+            <!-- Красный для удаления/отключения -->
+            <SolidColorBrush x:Key="ButtonDangerBorderBrush" Color="#E74C3C"/>
+            <SolidColorBrush x:Key="ButtonDangerHoverBackgroundBrush" Color="#C0392B"/>
+            <!-- Темнее красный -->
+            <SolidColorBrush x:Key="ButtonDangerHoverBorderBrush" Color="#C0392B"/>
+            <SolidColorBrush x:Key="ButtonDangerPressedBackgroundBrush" Color="#A93226"/>
+            <!-- Еще темнее красный -->
+            <SolidColorBrush x:Key="ButtonDangerPressedBorderBrush" Color="#A93226"/>
+            <SolidColorBrush x:Key="ButtonDangerForegroundBrush" Color="#FFFFFF"/>
+            <!-- Белый текст на красном -->
+
+            <SolidColorBrush x:Key="FocusBorderBrush" Color="#80BDFF"/>
+            <!-- Цвет рамки при фокусе (голубой) -->
+            <Color x:Key="FocusShadowColor" A="128" R="52" G="152" B="219"/>
+            <!-- Цвет тени при фокусе (полупрозрачный синий) -->
+
+            <!-- Глобальные настройки шрифта -->
+            <Style TargetType="Window">
+                <Setter Property="FontFamily" Value="Segoe UI"/>
+                <!-- Хороший стандартный шрифт -->
+                <!-- <Setter Property="FontFamily" Value="Montserrat"/> -->
+                <!-- Если установлен -->
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Background" Value="{StaticResource PrimaryBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+                <!-- Добавляем здесь -->
+                <Setter Property="UseLayoutRounding" Value="True"/>
+                <!-- И это тоже может помочь -->
+            </Style>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                
+            </Style>
+            <Style TargetType="Label">
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
+            
+            <!-- Стиль для "карточек" -->
+            <Style x:Key="CardBorderStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource LightBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="15"/>
+                <Setter Property="Margin" Value="5"/>
+            </Style>
+
+            <!-- Стиль для полей ввода -->
+            <Style TargetType="{x:Type TextBox}">
+                <Setter Property="Padding" Value="8,5"/>
+                <Setter Property="BorderBrush" Value="{StaticResource ButtonDefaultBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Height" Value="38"/>
+                <!-- Задаем стандартную высоту -->
+                <Setter Property="Validation.ErrorTemplate" Value="{x:Null}"/>
+                <!-- Убираем стандартную красную рамку ошибки -->
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type TextBoxBase}">
+                            <Border x:Name="border" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4" SnapsToDevicePixels="True">
+                                <ScrollViewer x:Name="PART_ContentHost" Focusable="false" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsKeyboardFocused" Value="true">
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource FocusBorderBrush}"/>
+                                    <Setter Property="Effect">
+                                        <Setter.Value>
+                                            <DropShadowEffect Color="{StaticResource FocusShadowColor}" BlurRadius="5" ShadowDepth="0" Opacity="0.6"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="false">
+                                    <Setter Property="Background" Value="{StaticResource DisabledBackgroundBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource DisabledForegroundBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource DisabledBorderBrush}"/>
+                                </Trigger>
+                                <Trigger Property="Validation.HasError" Value="true">
+                                    <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource ButtonDangerBackgroundBrush}"/>
+                                    <!-- Красная рамка при ошибке валидации -->
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+
+            <!-- ОТДЕЛЬНЫЙ стиль для PasswordBox -->
+            <Style TargetType="{x:Type PasswordBox}">
+                <!-- Дублируем общие свойства -->
+                <Setter Property="BorderBrush" Value="{StaticResource ButtonDefaultBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Height" Value="38"/>
+                <Setter Property="Padding" Value="8,0"/>
+                <Setter Property="AllowDrop" Value="true"/>
+                <Setter Property="ScrollViewer.PanningMode" Value="VerticalFirst"/>
+                <Setter Property="Stylus.IsFlicksEnabled" Value="False"/>
+                <!-- Специфичные для PasswordBox -->
+                <Setter Property="PasswordChar" Value="●"/>
+                <!-- Шаблон -->
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type PasswordBox}">
+                            <Border x:Name="border" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4" SnapsToDevicePixels="True">
+                                <ScrollViewer x:Name="PART_ContentHost" Focusable="false" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsKeyboardFocused" Value="true">
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource FocusBorderBrush}"/>
+                                    <Setter Property="Effect">
+                                        <Setter.Value>
+                                            <DropShadowEffect Color="{StaticResource FocusShadowColor}" BlurRadius="5" ShadowDepth="0" Opacity="0.6"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="false">
+                                    <Setter Property="Background" Value="{StaticResource DisabledBackgroundBrush}"/>
+                                    <!-- Foreground для символов пароля может не применяться -->
+                                    <Setter Property="BorderBrush" Value="{StaticResource DisabledBorderBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+
+            <!-- Базовый стиль для кнопок -->
+            <Style TargetType="{x:Type Button}">
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="{StaticResource ButtonDefaultBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource ButtonDefaultBorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Height" Value="38"/>
+                <!-- Стандартная высота кнопки -->
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <!-- Убираем стандартную пунктирную рамку фокуса -->
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ButtonBase}">
+                            <Border x:Name="border" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"
+                                    SnapsToDevicePixels="true">
+                                <ContentPresenter x:Name="contentPresenter" Focusable="False"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  Margin="{TemplateBinding Padding}"
+                                                  RecognizesAccessKey="True"
+                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="true">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource ButtonDefaultHoverBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource ButtonDefaultHoverBorderBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="true">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource ButtonDefaultPressedBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource ButtonDefaultPressedBorderBrush}"/>
+                                    <!-- Легкое смещение контента при нажатии -->
+                                    <Setter Property="RenderTransform" TargetName="contentPresenter">
+                                        <Setter.Value>
+                                            <TranslateTransform Y="1"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="true">
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource FocusBorderBrush}"/>
+                                    <Setter Property="Effect" TargetName="border">
+                                        <Setter.Value>
+                                            <DropShadowEffect Color="{StaticResource FocusShadowColor}" BlurRadius="4" ShadowDepth="0" Opacity="0.5"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="false">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource DisabledBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource DisabledBorderBrush}"/>
+                                    <Setter Property="TextElement.Foreground" TargetName="contentPresenter" Value="{StaticResource DisabledForegroundBrush}"/>
+                                    <Setter Property="Opacity" Value="0.7"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Стиль для основной (синей) кнопки -->
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                <Setter Property="Background" Value="{StaticResource ButtonPrimaryBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource ButtonPrimaryBorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource ButtonPrimaryForegroundBrush}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ButtonBase}">
+                            <Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" SnapsToDevicePixels="true">
+                                <ContentPresenter x:Name="contentPresenter" Focusable="False" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="true">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource ButtonPrimaryHoverBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource ButtonPrimaryHoverBorderBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="true">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource ButtonPrimaryPressedBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource ButtonPrimaryPressedBorderBrush}"/>
+                                    <Setter Property="RenderTransform" TargetName="contentPresenter">
+                                        <Setter.Value>
+                                            <TranslateTransform Y="1"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="true">
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource FocusBorderBrush}"/>
+                                    <Setter Property="Effect" TargetName="border">
+                                        <Setter.Value>
+                                            <DropShadowEffect Color="{StaticResource FocusShadowColor}" BlurRadius="4" ShadowDepth="0" Opacity="0.5"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="false">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource DisabledBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource DisabledBorderBrush}"/>
+                                    <Setter Property="TextElement.Foreground" TargetName="contentPresenter" Value="{StaticResource DisabledForegroundBrush}"/>
+                                    <Setter Property="Opacity" Value="0.7"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Стиль для "опасной" (красной) кнопки -->
+            <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                <Setter Property="Background" Value="{StaticResource ButtonDangerBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource ButtonDangerBorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource ButtonDangerForegroundBrush}"/>
+                <!-- Скопируем ControlTemplate из PrimaryButtonStyle и заменим цвета на Danger -->
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ButtonBase}">
+                            <Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" SnapsToDevicePixels="true">
+                                <ContentPresenter x:Name="contentPresenter" Focusable="False" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="true">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource ButtonDangerHoverBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource ButtonDangerHoverBorderBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="true">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource ButtonDangerPressedBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource ButtonDangerPressedBorderBrush}"/>
+                                    <Setter Property="RenderTransform" TargetName="contentPresenter">
+                                        <Setter.Value>
+                                            <TranslateTransform Y="1"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="true">
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource FocusBorderBrush}"/>
+                                    <!-- Можно оставить синий фокус или сделать красный -->
+                                    <Setter Property="Effect" TargetName="border">
+                                        <Setter.Value>
+                                            <DropShadowEffect Color="{StaticResource FocusShadowColor}" BlurRadius="4" ShadowDepth="0" Opacity="0.5"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="false">
+                                    <Setter Property="Background" TargetName="border" Value="{StaticResource DisabledBackgroundBrush}"/>
+                                    <Setter Property="BorderBrush" TargetName="border" Value="{StaticResource DisabledBorderBrush}"/>
+                                    <Setter Property="TextElement.Foreground" TargetName="contentPresenter" Value="{StaticResource DisabledForegroundBrush}"/>
+                                    <Setter Property="Opacity" Value="0.7"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Стиль для GroupBox -->
+            <Style TargetType="{x:Type GroupBox}">
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="10"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type GroupBox}">
+                            <Grid SnapsToDevicePixels="true">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <!-- Рамка заголовка -->
+                                <Border Grid.Row="0" Background="{StaticResource CardBackgroundBrush}"
+                                        BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,1,1,0"
+                                        CornerRadius="4,4,0,0" >
+                                    <ContentPresenter Margin="4" ContentSource="Header" RecognizesAccessKey="True" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                </Border>
+                                <!-- Рамка контента -->
+                                <Border Grid.Row="1" Background="{StaticResource SecondaryBackgroundBrush}"
+                                        BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,0,1,1"
+                                        CornerRadius="0,0,4,4" >
+                                    <ContentPresenter Margin="{TemplateBinding Padding}" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                </Border>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Базовый стиль для DataGrid (можно дорабатывать) -->
+            <Style TargetType="{x:Type DataGrid}">
+                <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="RowHeaderWidth" Value="0"/>
+                <!-- Скрываем стандартный столбец заголовка строки -->
+                <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource LightBorderBrush}"/>
+                <Setter Property="VerticalGridLinesBrush" Value="{StaticResource LightBorderBrush}"/>
+                <Setter Property="CanUserAddRows" Value="False"/>
+                <Setter Property="CanUserDeleteRows" Value="False"/>
+                <Setter Property="AutoGenerateColumns" Value="False"/>
+                <Setter Property="IsReadOnly" Value="True"/>
+                <!-- По умолчанию только для чтения -->
+                <Setter Property="SelectionMode" Value="Single"/>
+                <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+                <!-- Только горизонтальные линии -->
+            </Style>
+            <Style TargetType="{x:Type DataGridColumnHeader}">
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Padding" Value="10,5"/>
+                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            </Style>
+            <Style TargetType="{x:Type DataGridCell}">
+                <Setter Property="Padding" Value="10,5"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{StaticResource ButtonPrimaryHoverBackgroundBrush}"/>
+                        <Setter Property="Foreground" Value="{StaticResource ButtonPrimaryForegroundBrush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Стиль для ListView (базовый) -->
+            <Style TargetType="{x:Type ListView}">
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+            </Style>
+            <Style TargetType="{x:Type GridViewColumnHeader}">
+                <Setter Property="Padding" Value="10,5"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
