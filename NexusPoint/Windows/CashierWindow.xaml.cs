@@ -1044,6 +1044,31 @@ namespace NexusPoint.Windows
             this.Close(); // Закрываем окно кассира
         }
 
+        // --- ОБРАБОТЧИК КЛИКА МЫШИ ---
+        private void MenuListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            // Проверяем, был ли клик действительно на элементе ListBoxItem
+            DependencyObject dep = (DependencyObject)e.OriginalSource;
+
+            // Поднимаемся по дереву элементов, чтобы найти ListBoxItem
+            while ((dep != null) && !(dep is ListBoxItem))
+            {
+                dep = VisualTreeHelper.GetParent(dep);
+            }
+
+            // Если клик был на ListBoxItem
+            if (dep is ListBoxItem clickedItem)
+            {
+                // Убедимся, что этот элемент действительно выбран (на всякий случай)
+                // Хотя обычно клик его и выбирает
+                MenuListBox.SelectedItem = clickedItem;
+
+                // Выполняем действие для выбранного элемента
+                ExecuteSelectedMenuItem();
+                e.Handled = true; // Помечаем событие как обработанное
+            }
+        }
+
 
         // --- Обработка горячих клавиш ---
         private void Window_KeyDown(object sender, KeyEventArgs e)

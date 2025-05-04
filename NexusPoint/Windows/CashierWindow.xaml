@@ -236,7 +236,7 @@
                     <ListBox x:Name="MenuListBox" BorderThickness="0" Focusable="True"
                                ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
                         KeyDown="MenuListBox_KeyDown"
-                     
+                        PreviewMouseLeftButtonUp = "MenuListBox_PreviewMouseLeftButtonUp"
                         MouseDoubleClick="MenuListBox_MouseDoubleClick">
                        
                         <ListBoxItem x:Name="OpenShiftItem" Content="Открыть смену"/>
