@@ -1,5 +1,7 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
+using NexusPoint.Utils;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -40,6 +42,7 @@ namespace NexusPoint.Windows
         private readonly ShiftRepository _shiftRepository;
         private readonly CashDrawerOperationRepository _cashDrawerRepository;
         private readonly UserRepository _userRepository;
+        private ContextMenu _originalCheckListViewContextMenu;
 
         // Используем ObservableCollection для автоматического обновления ListView
         private ObservableCollection<CheckItemView> CurrentCheckItems = new ObservableCollection<CheckItemView>();
@@ -66,14 +69,17 @@ namespace NexusPoint.Windows
             // Привязка коллекции к ListView
             CheckListView.ItemsSource = CurrentCheckItems;
 
-            // Настройка часов
-            SetupClock();
+            //// Настройка часов
+            //SetupClock();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            _originalCheckListViewContextMenu = CheckListView.ContextMenu; // <<--- СОХРАНЯЕМ ОРИГИНАЛ
+
             CheckOpenShift(); // Проверяем/загружаем смену при загрузке
             UpdateCashierInfo();
+            SetupClock(); // Перенес инициализацию часов сюда
             ItemInputTextBox.Focus(); // Устанавливаем фокус
         }
 
@@ -122,7 +128,7 @@ namespace NexusPoint.Windows
             QuantityButton.IsEnabled = false;
             DeleteItemButton.IsEnabled = false;
             ReturnModeButton.IsEnabled = false;
-            DiscountButton.IsEnabled = false; // И так выключена
+            ManualDiscountButton.IsEnabled = false; // И так выключена
             // PrintDocButton.IsEnabled = false; // Печать старых можно оставить?
             // LookupItemButton.IsEnabled = false; // Инфо можно оставить?
             CancelCheckButton.IsEnabled = false;
@@ -136,22 +142,14 @@ namespace NexusPoint.Windows
             QuantityButton.IsEnabled = true;
             DeleteItemButton.IsEnabled = true;
             ReturnModeButton.IsEnabled = true;
-            // DiscountButton.IsEnabled = true; // Если будет реализовано
+            ManualDiscountButton.IsEnabled = true;
             // PrintDocButton.IsEnabled = true;
             // LookupItemButton.IsEnabled = true;
             CancelCheckButton.IsEnabled = true;
-            // Восстанавливаем контекстное меню, если оно было создано в XAML
-            if (FindResource("CheckListView.ContextMenu") is ContextMenu cm) // Пример получения из ресурсов
+            // Восстанавливаем контекстное меню из сохраненного оригинала
+            if (_originalCheckListViewContextMenu != null)
             {
-                CheckListView.ContextMenu = cm;
-            }
-            else if (CheckListView.ContextMenu == null) // Или создаем заново, если проще
-            {
-                var contextMenu = new ContextMenu();
-                contextMenu.Items.Add(new MenuItem { Header = "Изменить количество", CommandParameter = CheckListView.SelectedItem }); // Пример привязки команды
-                contextMenu.Items.Add(new MenuItem { Header = "Удалить позицию", CommandParameter = CheckListView.SelectedItem });
-                // Добавьте обработчики Click
-                CheckListView.ContextMenu = contextMenu;
+                CheckListView.ContextMenu = _originalCheckListViewContextMenu; 
             }
 
             ItemInputTextBox.Focus();
@@ -192,8 +190,9 @@ namespace NexusPoint.Windows
 
         private void UpdateClock()
         {
-            ClockTextBlock.Text = DateTime.Now.ToString("HH:mm:ss");
+            ClockTextBlock.Text = DateTime.Now.ToString("HH:mm");
         }
+
 
         // --- Логика Добавления/Обработки Товара ---
 
@@ -337,19 +336,34 @@ namespace NexusPoint.Windows
         }
 
         // --- Вспомогательное сообщение в статусной строке ---
-        private async void ShowTemporaryStatusMessage(string message, bool isError = false, int durationSeconds = 3)
+        private async void ShowTemporaryStatusMessage(string message, bool isError = false, bool isInfo = false, int durationSeconds = 3)
         {
-            var originalContent = CashierInfoStatusText.Text; // Сохраняем имя кассира
+            var originalContent = CashierInfoStatusText.Text;
+            var originalForeground = CashierInfoStatusText.Foreground; // Сохраняем исходный цвет
+
             CashierInfoStatusText.Text = message;
-            CashierInfoStatusText.Foreground = isError ? Brushes.Red : Brushes.Green;
+            // Устанавливаем цвет в зависимости от флагов
+            if (isError)
+            {
+                CashierInfoStatusText.Foreground = Brushes.Red;
+            }
+            else if (isInfo) // Добавляем проверку на isInfo
+            {
+                CashierInfoStatusText.Foreground = Brushes.Blue; // Используем синий для информации
+            }
+            else // Обычное сообщение - зеленый
+            {
+                CashierInfoStatusText.Foreground = Brushes.Green;
+            }
+
 
             await Task.Delay(TimeSpan.FromSeconds(durationSeconds));
 
-            // Восстанавливаем, только если сообщение не изменилось за это время
+            // Восстанавливаем, только если сообщение не изменилось
             if (CashierInfoStatusText.Text == message)
             {
                 CashierInfoStatusText.Text = originalContent;
-                CashierInfoStatusText.Foreground = Brushes.Black; // Стандартный цвет текста StatusBarItem
+                CashierInfoStatusText.Foreground = originalForeground; // Восстанавливаем исходный цвет
             }
         }
 
@@ -410,7 +424,7 @@ namespace NexusPoint.Windows
                     if (change > 0) printMessage += $"Сдача: {change:C}\n";
                     printMessage += $"ИТОГО: {savedCheck.TotalAmount:C}";
 
-                    MessageBox.Show(printMessage, "Чек сохранен (Имитация печати)", MessageBoxButton.OK, MessageBoxImage.Information);
+                    PrinterService.Print($"Чек №{savedCheck.CheckNumber}", printMessage);
 
                     // 6. Очищаем текущий чек
                     ClearCheck();
@@ -527,11 +541,29 @@ namespace NexusPoint.Windows
             ItemInputTextBox.Focus();
         }
 
-
-        private void DiscountButton_Click(object sender, RoutedEventArgs e)
+        private void ManualDiscountButton_Click(object sender, RoutedEventArgs e)
         {
-            // Логика применения общей скидки на чек (пока не реализовано)
-            MessageBox.Show("Применение общих скидок пока не реализовано.");
+            if (!CurrentCheckItems.Any()) return; // Нельзя применить к пустому чеку
+
+            decimal currentTotal = CurrentCheckItems.Sum(i => i.Quantity * i.PriceAtSale); // Берем сумму до скидок
+
+            var discountDialog = new DiscountDialog(currentTotal);
+            if (discountDialog.ShowDialog() == true)
+            {
+                // Скидка подтверждена, применяем ее ко всем позициям
+                decimal appliedAmount = DiscountCalculator.ApplyManualCheckDiscount(
+                    CurrentCheckItems.ToList<CheckItem>(), // Передаем базовые CheckItem
+                    discountDialog.DiscountValue,
+                    discountDialog.IsPercentage);
+
+                // Обновляем UI ListView (если нужно "перерисовать" элементы)
+                var tempItems = CurrentCheckItems.ToList();
+                CurrentCheckItems.Clear();
+                tempItems.ForEach(CurrentCheckItems.Add);
+
+                UpdateTotals(); // Пересчитываем общие итоги
+                ShowTemporaryStatusMessage($"Применена ручная скидка: {appliedAmount:C}", isInfo: true);
+            }
         }
 
         private void PrintDocButton_Click(object sender, RoutedEventArgs e)
@@ -564,12 +596,102 @@ namespace NexusPoint.Windows
             }
         }
 
+        // --- Обработчики для MenuItem в Popup для исправления подсветки ---
+
+        // Обработчик открытия Popup
+        private void MainMenuPopup_Opened(object sender, EventArgs e)
+        {
+            // Устанавливаем фокус на ListBox, когда Popup открылся
+            MenuListBox.Focus();
+            // Опционально: выбираем первый доступный элемент
+            if (MenuListBox.Items.Count > 0)
+            {
+                var firstItem = MenuListBox.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
+                if (firstItem != null && firstItem.IsEnabled)
+                {
+                    MenuListBox.SelectedIndex = 0;
+                    // firstItem.Focus(); // Можно попробовать и так, но фокус на ListBox обычно достаточно
+                }
+                else if (MenuListBox.Items.Count > 1)
+                {
+                    // Если первый неактивен, попробуем второй (например, "Закрыть смену")
+                    var secondItem = MenuListBox.ItemContainerGenerator.ContainerFromIndex(1) as ListBoxItem;
+                    if (secondItem != null && secondItem.IsEnabled)
+                    {
+                        MenuListBox.SelectedIndex = 1;
+                    }
+                }
+            }
+        }
+
+        // Обработка нажатия Enter или двойного клика на элементе ListBox
+        private void ExecuteSelectedMenuItem()
+        {
+            if (MenuListBox.SelectedItem is ListBoxItem selectedItem)
+            {
+                // Закрываем Popup перед выполнением действия
+                MainMenuPopup.IsOpen = false;
+
+                // Определяем, какой пункт был выбран, по его имени (x:Name)
+                switch (selectedItem.Name)
+                {
+                    case "OpenShiftItem":
+                        OpenShiftMenuItem_Click(selectedItem, null); // Вызываем старый обработчик
+                        break;
+                    case "CloseShiftItem":
+                        CloseShiftMenuItem_Click(selectedItem, null);
+                        break;
+                    case "CashInItem":
+                        CashInMenuItem_Click(selectedItem, null);
+                        break;
+                    case "CashOutItem":
+                        CashOutMenuItem_Click(selectedItem, null);
+                        break;
+                    case "LockStationItem":
+                        LockStationMenuItem_Click(selectedItem, null);
+                        break;
+                    case "LogoutItem":
+                        LogoutMenuItem_Click(selectedItem, null);
+                        break;
+                }
+            }
+        }
+
+        private void MenuListBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter || e.Key == Key.Space) // Enter или Пробел для выбора
+            {
+                ExecuteSelectedMenuItem();
+                e.Handled = true; // Поглощаем событие
+            }
+            else if (e.Key == Key.Escape) // Escape для закрытия Popup
+            {
+                MainMenuPopup.IsOpen = false;
+                MenuButton.Focus(); // Возвращаем фокус на кнопку
+                e.Handled = true;
+            }
+        }
+
+        private void MenuListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            // Проверяем, что двойной клик был именно на элементе списка
+            if (e.Source is FrameworkElement element &&
+                (element.DataContext is ListBoxItem || // Клик на самом элементе
+                element.TemplatedParent is ListBoxItem)) // Клик на элементе внутри шаблона
+            {
+                ExecuteSelectedMenuItem();
+                e.Handled = true;
+            }
+        }
+
+
+
 
         // --- Меню (F12) ---
         private void MenuButton_Click(object sender, RoutedEventArgs e)
         {
-            // Открываем/закрываем Popup меню
             MainMenuPopup.IsOpen = !MainMenuPopup.IsOpen;
+            // Фокус будет установлен в обработчике MainMenuPopup_Opened
         }
 
         private void OpenShiftMenuItem_Click(object sender, RoutedEventArgs e)
@@ -642,7 +764,7 @@ namespace NexusPoint.Windows
                         zReport += $"Остаток факт.: {closedShift.EndCashActual ?? 0:C}\n";
                         zReport += $"Расхождение: {closedShift.Difference ?? 0:C}\n";
 
-                        MessageBox.Show(zReport, "Смена закрыта (Z-Отчет)", MessageBoxButton.OK, MessageBoxImage.Information);
+                        PrinterService.Print($"Z-Отчет (Смена №{closedShift.ShiftNumber})", zReport);
 
                         CurrentShift = null; // Сбрасываем текущую смену
                         UpdateShiftInfo();

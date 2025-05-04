@@ -1,0 +1,70 @@
+﻿<Window x:Class="NexusPoint.Windows.DiscountDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NexusPoint.Windows"
+        mc:Ignorable="d"
+        Title="Применение скидки на чек" Height="300" Width="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Тип скидки -->
+            <RowDefinition Height="Auto"/>
+            <!-- Значение скидки -->
+            <RowDefinition Height="Auto"/>
+            <!-- Информация -->
+            <RowDefinition Height="*"/>
+            <!-- Пустое -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопки -->
+        </Grid.RowDefinitions>
+
+        <!-- Тип скидки -->
+        <GroupBox Grid.Row="0" Header="Тип скидки" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" Margin="10,5">
+                <RadioButton x:Name="PercentageRadioButton" Content="Процент (%)" GroupName="DiscountType" IsChecked="True" Margin="0,0,20,0" Checked="DiscountType_Changed"/>
+                <RadioButton x:Name="AmountRadioButton" Content="Сумма" GroupName="DiscountType" Checked="DiscountType_Changed"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Значение скидки -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+            <Label Content="Значение:" VerticalAlignment="Center"/>
+            <TextBox x:Name="DiscountValueTextBox" Width="100" Margin="5,0" Height="25" VerticalContentAlignment="Center"
+                     PreviewTextInput="DiscountValueTextBox_PreviewTextInput" TextChanged="DiscountValueTextBox_TextChanged"/>
+            <TextBlock x:Name="ValueSuffixText" Text="%" VerticalAlignment="Center" Margin="3,0,0,0"/>
+        </StackPanel>
+
+        <!-- Информация -->
+        <Border Grid.Row="2" Background="WhiteSmoke" BorderBrush="LightGray" BorderThickness="1" Padding="10" Margin="0,5,0,15">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="Сумма чека (до скидки):"/>
+                    <TextBlock x:Name="OriginalAmountText" Text="0.00" HorizontalAlignment="Right" FontWeight="SemiBold"/>
+                </Grid>
+                <Grid Margin="0,5,0,0">
+                    <TextBlock Text="Сумма скидки:" Foreground="DarkRed"/>
+                    <TextBlock x:Name="DiscountAmountText" Text="0.00" HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="DarkRed"/>
+                </Grid>
+                <Grid Margin="0,5,0,0">
+                    <TextBlock Text="Итоговая сумма:" FontWeight="Bold"/>
+                    <TextBlock x:Name="FinalAmountText" Text="0.00" HorizontalAlignment="Right" FontWeight="Bold"/>
+                </Grid>
+                <TextBlock x:Name="ErrorText" Foreground="Red" Margin="0,5,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
+
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="OkButton" Content="Применить" Width="100" Height="30" IsDefault="True" Click="OkButton_Click"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True"/>
+        </StackPanel>
+
+    </Grid>
+</Window>

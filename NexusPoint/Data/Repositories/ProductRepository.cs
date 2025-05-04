@@ -130,13 +130,27 @@ namespace NexusPoint.Data.Repositories
         {
             using (var connection = DatabaseHelper.GetConnection())
             {
-                // Убедимся что внешние ключи включены для этого соединения перед операцией
-                // (Хотя DatabaseHelper уже должен был это сделать)
-                // connection.Execute("PRAGMA foreign_keys = ON;");
+                connection.Open(); // Откроем для транзакции
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        // 1. СНАЧАЛА удаляем связанный остаток (если есть)
+                        connection.Execute("DELETE FROM StockItems WHERE ProductId = @Id", new { Id = productId }, transaction);
 
-                string query = "DELETE FROM Products WHERE ProductId = @Id";
-                // ON DELETE CASCADE в определении StockItems должен удалить связанную запись остатка
-                return connection.Execute(query, new { Id = productId }) > 0;
+                        // 2. ПОТОМ удаляем сам товар
+                        int rowsAffected = connection.Execute("DELETE FROM Products WHERE ProductId = @Id", new { Id = productId }, transaction);
+
+                        transaction.Commit(); // Фиксируем, если все успешно
+                        return rowsAffected > 0;
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback(); // Откатываем при ошибке
+                        System.Diagnostics.Debug.WriteLine($"Error deleting product {productId}: {ex.Message}");
+                        throw; // Пробрасываем исключение
+                    }
+                }
             }
         }
 

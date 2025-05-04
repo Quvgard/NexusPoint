@@ -128,45 +128,129 @@
                 <Button x:Name="QuantityButton" Content="[F2] Кол-во" Height="60" FontSize="16" Margin="5" Click="QuantityButton_Click"/>
                 <Button x:Name="DeleteItemButton" Content="[Del] Удалить" Height="60" FontSize="16" Margin="5" Click="DeleteCheckItemButton_Click"/>
                 <Button x:Name="ReturnModeButton" Content="[F6] Возврат" Height="60" FontSize="16" Margin="5" Click="ReturnModeButton_Click"/>
-                <Button x:Name="DiscountButton" Content="Скидка (общ)" Height="60" FontSize="16" Margin="5" Click="DiscountButton_Click" IsEnabled="False"/>
+                <Button x:Name="ManualDiscountButton" Content="[F4] Скидка" Height="60" FontSize="16" Margin="5" Click="ManualDiscountButton_Click"/>
+                
                 <!-- Пока отключим -->
                 <Button x:Name="PrintDocButton" Content="Печать док." Height="60" FontSize="16" Margin="5" Click="PrintDocButton_Click"/>
                 <Button x:Name="LookupItemButton" Content="Инфо о товаре" Height="60" FontSize="16" Margin="5" Click="LookupItemButton_Click"/>
                 <Button x:Name="CancelCheckButton" Content="Отмена чека" Height="60" FontSize="16" Background="#FFCACA" Margin="5" Click="CancelCheckButton_Click"/>
-
+                
 
             </UniformGrid>
 
-            <!-- Строка состояния и Меню -->
-            <StatusBar Grid.Row="3" VerticalAlignment="Bottom">
+            <!-- Строка состояния и Меню (Двухстрочная) -->
+            <StatusBar Grid.Row="3" VerticalAlignment="Bottom" Padding="0">
                 <StatusBarItem>
-                    <TextBlock x:Name="CashierInfoStatusText" Text="Кассир: -" Margin="5,0"/>
-                </StatusBarItem>
-                <StatusBarItem>
-                    <TextBlock x:Name="ShiftInfoStatusText" Text="Смена: -" Margin="5,0"/>
-                </StatusBarItem>
-                <!-- Правая часть статусбара -->
-                <StatusBarItem HorizontalAlignment="Right">
-                    <StackPanel Orientation="Horizontal">
-                        <Button x:Name="MenuButton" Content="Меню [F12]" Padding="5,2" Click="MenuButton_Click"/>
-                        <!-- Часы -->
-                        <TextBlock x:Name="ClockTextBlock" Text="00:00:00" Margin="10,0,5,0" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <!-- Один элемент на всю ширину -->
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <!-- Строка 1: Кассир, Смена -->
+                            <RowDefinition Height="Auto"/>
+                            <!-- Строка 2: Меню, Время -->
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <!-- Левая колонка (растягивается) -->
+                            <ColumnDefinition Width="Auto"/>
+                            <!-- Правая колонка (авторазмер) -->
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Строка 1 -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" x:Name="CashierInfoStatusText" Text="Кассир: -" Margin="5,2" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ShiftInfoStatusText" Text="Смена: -" Margin="5,2" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
+                        <!-- Строка 2 -->
+                        <Button Grid.Row="1" Grid.Column="0" x:Name="MenuButton" Content="Меню [F12]" Padding="5,2" Click="MenuButton_Click" Margin="5,2" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ClockTextBlock" Text="00:00" Margin="5,2" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
+                    </Grid>
                 </StatusBarItem>
             </StatusBar>
             <!-- Всплывающее меню для кнопки Меню -->
-            <Popup x:Name="MainMenuPopup" PlacementTarget="{Binding ElementName=MenuButton}" Placement="Top" StaysOpen="False">
-                <Border Background="WhiteSmoke" BorderBrush="Gray" BorderThickness="1">
-                    <StackPanel>
-                        <MenuItem Header="Открыть смену" Click="OpenShiftMenuItem_Click"/>
-                        <MenuItem Header="Закрыть смену" Click="CloseShiftMenuItem_Click"/>
+            <Popup x:Name="MainMenuPopup" PlacementTarget="{Binding ElementName=MenuButton}" Placement="Top" StaysOpen="False"
+                   AllowsTransparency="True" PopupAnimation="Fade"
+                   Opened="MainMenuPopup_Opened">
+                <!-- Добавляем обработчик открытия -->
+                <Popup.Resources>
+                    <!-- Стиль для Separator -->
+                    <Style TargetType="Separator">
+                        <Setter Property="Height" Value="1"/>
+                        <Setter Property="Background" Value="LightGray"/>
+                        <Setter Property="Margin" Value="4,5"/>
+                    </Style>
+                    <!-- СТИЛЬ ДЛЯ ListBoxItem -->
+                    <Style TargetType="{x:Type ListBoxItem}">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <!-- Растягиваем контент -->
+                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                        <Setter Property="Padding" Value="6,4"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <!-- Убираем рамку самого элемента -->
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        <!-- Убираем стандартную рамку фокуса -->
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                    <Border x:Name="Bd"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            Padding="{TemplateBinding Padding}"
+                                            SnapsToDevicePixels="true">
+                                        <!-- Используем ContentPresenter для отображения содержимого -->
+                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <!-- Подсветка при наведении мыши -->
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" TargetName="Bd" Value="#3D26A0DA"/>
+                                            <!-- Полупрозрачный синий -->
+                                            <Setter Property="TextBlock.Foreground" Value="Black"/>
+                                        </Trigger>
+                                        <!-- Подсветка при ВЫБОРЕ -->
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <!-- *** ИЗМЕНЯЕМ ЗДЕСЬ *** -->
+                                            <!-- Используем тот же цвет, что и для MouseOver -->
+                                            <Setter Property="Background" TargetName="Bd" Value="#3D26A0DA"/>
+                                            <!-- Текст тоже сделаем черным для единообразия с MouseOver -->
+                                            <Setter Property="TextBlock.Foreground" Value="Black"/>
+                                            <!-- Старый вариант:
+                                            <Setter Property="Background" TargetName="Bd" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                                            <Setter Property="TextBlock.Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+                                            -->
+                                        </Trigger>
+                                        <!-- Стиль для неактивных -->
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="TextBlock.Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Popup.Resources>
+
+                <!-- Используем ListBox вместо Menu -->
+                <Border Background="WhiteSmoke" BorderBrush="Gray" BorderThickness="1" CornerRadius="2">
+                    <ListBox x:Name="MenuListBox" BorderThickness="0" Focusable="True"
+                               ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
+                        KeyDown="MenuListBox_KeyDown"
+                     
+                        MouseDoubleClick="MenuListBox_MouseDoubleClick">
+                       
+                        <ListBoxItem x:Name="OpenShiftItem" Content="Открыть смену"/>
+                        <ListBoxItem x:Name="CloseShiftItem" Content="Закрыть смену"/>
                         <Separator/>
-                        <MenuItem Header="Внесение наличных" Click="CashInMenuItem_Click"/>
-                        <MenuItem Header="Изъятие наличных" Click="CashOutMenuItem_Click"/>
+                        <ListBoxItem x:Name="CashInItem" Content="Внесение наличных"/>
+                        <ListBoxItem x:Name="CashOutItem" Content="Изъятие наличных"/>
                         <Separator/>
-                        <MenuItem Header="Блокировать" Click="LockStationMenuItem_Click" IsEnabled="False"/>
-                        <MenuItem Header="Выход из системы" Click="LogoutMenuItem_Click"/>
-                    </StackPanel>
+                        <ListBoxItem x:Name="LockStationItem" Content="Блокировать" IsEnabled="False"/>
+                        <ListBoxItem x:Name="LogoutItem" Content="Выход из системы"/>
+                    </ListBox>
                 </Border>
             </Popup>
 

@@ -111,20 +111,43 @@ namespace NexusPoint.Data.Repositories
 
         // Метод создания записи, если его нет (вызывается из ProductRepository)
         // Сделаем его доступным для ProductRepository
-        public void EnsureStockItemExists(int productId, SQLiteConnection connection, SQLiteTransaction transaction)
+        public void EnsureStockItemExists(int productId, SQLiteConnection connection = null, SQLiteTransaction transaction = null)
         {
-            var existingStock = connection.QueryFirstOrDefault<int?>(
-                "SELECT StockItemId FROM StockItems WHERE ProductId = @ProductId",
-                new { ProductId = productId }, transaction);
+            SQLiteConnection conn = connection; // Используем переданное соединение
+            bool closeConnection = false;
 
-            if (existingStock == null)
+            // Если соединение не передано, создаем свое
+            if (conn == null)
             {
-                connection.Execute(@"
-                     INSERT INTO StockItems (ProductId, Quantity, LastUpdated)
-                     VALUES (@ProductId, @Quantity, @LastUpdated);",
-                    new { ProductId = productId, Quantity = 0m, LastUpdated = DateTime.Now },
-                    transaction);
-                System.Diagnostics.Debug.WriteLine($"StockItem created for ProductId {productId}.");
+                conn = DatabaseHelper.GetConnection();
+                // conn.Open(); // Dapper откроет сам
+                closeConnection = true; // Пометим, что его нужно закрыть
+                transaction = null; // Нельзя использовать внешнюю транзакцию без внешнего соединения
+            }
+
+            try // Добавляем try-finally для корректного закрытия
+            {
+                var existingStock = conn.QueryFirstOrDefault<int?>(
+                    "SELECT StockItemId FROM StockItems WHERE ProductId = @ProductId",
+                    new { ProductId = productId }, transaction); // Передаем транзакцию, если она есть
+
+                if (existingStock == null)
+                {
+                    conn.Execute(@"
+                 INSERT INTO StockItems (ProductId, Quantity, LastUpdated)
+                 VALUES (@ProductId, @Quantity, @LastUpdated);",
+                        new { ProductId = productId, Quantity = 0m, LastUpdated = DateTime.Now },
+                        transaction); // Передаем транзакцию, если она есть
+                    System.Diagnostics.Debug.WriteLine($"StockItem created for ProductId {productId}.");
+                }
+            }
+            finally
+            {
+                // Закрываем соединение, только если мы его сами создали в этом методе
+                if (closeConnection && conn != null)
+                {
+                    // conn.Close(); // Dapper обычно сам закрывает после выполнения
+                }
             }
         }
     }

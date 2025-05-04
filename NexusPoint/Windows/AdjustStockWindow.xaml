@@ -1,0 +1,100 @@
+﻿<Window x:Class="NexusPoint.Windows.AdjustStockWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NexusPoint.Windows"
+        mc:Ignorable="d"
+        Title="Корректировка остатков" Height="480" Width="550"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Поиск товара -->
+            <RowDefinition Height="Auto"/>
+            <!-- Информация о товаре -->
+            <RowDefinition Height="Auto"/>
+            <!-- Параметры корректировки -->
+            <RowDefinition Height="Auto"/>
+            <!-- Ошибка -->
+            <RowDefinition Height="*"/>
+            <!-- Пустое -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопки -->
+        </Grid.RowDefinitions>
+
+        <!-- Панель поиска товара -->
+        <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <Label Content="Код/ШК товара:" VerticalAlignment="Center"/>
+                <TextBox x:Name="ItemInputTextBox" Width="250" Margin="5,0" Height="25" VerticalContentAlignment="Center"
+                         KeyDown="ItemInputTextBox_KeyDown"/>
+                <Button x:Name="FindItemButton" Content="Найти" Width="80" Margin="5,0,0,0" Click="FindItemButton_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Информация о найденном товаре -->
+        <GroupBox Grid.Row="1" Header="Найденный товар" x:Name="ProductInfoGroup" Visibility="Collapsed" Margin="0,0,0,10">
+            <Grid Margin="5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Label Grid.Row="0" Grid.Column="0" Content="Наименование:" FontWeight="Bold"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ProductNameText" TextWrapping="Wrap"/>
+
+                <Label Grid.Row="1" Grid.Column="0" Content="Текущий остаток:" FontWeight="Bold"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="CurrentStockText" FontWeight="SemiBold"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Параметры корректировки -->
+        <GroupBox Grid.Row="2" Header="Операция с остатком" x:Name="AdjustmentGroup" IsEnabled="False" Margin="0,0,0,10">
+            <Grid Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Тип операции -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                    <Label Content="Тип операции:" VerticalAlignment="Center"/>
+                    <RadioButton x:Name="AddRadioButton" Content="Приемка (+)" GroupName="AdjType" IsChecked="True" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                    <RadioButton x:Name="SubtractRadioButton" Content="Списание (-)" GroupName="AdjType" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                    <RadioButton x:Name="SetRadioButton" Content="Установить (=)" GroupName="AdjType" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Количество -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+                    <Label Content="Количество:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="QuantityTextBox" Width="100" Margin="5,0" Height="25" VerticalContentAlignment="Center"
+                             PreviewTextInput="QuantityTextBox_PreviewTextInput"/>
+                </StackPanel>
+
+                <!-- Причина (необязательно) -->
+                <StackPanel Grid.Row="2" Orientation="Horizontal">
+                    <Label Content="Причина/Комментарий:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="ReasonTextBox" Width="250" Margin="5,0" Height="25" VerticalContentAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <!-- Ошибка -->
+        <TextBlock Grid.Row="3" x:Name="ErrorText" Foreground="Red" Margin="0,5,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="ApplyButton" Content="Применить" Width="120" Height="30" IsDefault="True" Click="ApplyButton_Click" IsEnabled="False"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True"/>
+        </StackPanel>
+
+    </Grid>
+</Window>

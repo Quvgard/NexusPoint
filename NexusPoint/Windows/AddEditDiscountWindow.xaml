@@ -1,0 +1,120 @@
+﻿<Window x:Class="NexusPoint.Windows.AddEditDiscountWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NexusPoint.Windows"
+        mc:Ignorable="d"
+        Title="Добавление/Редактирование акции" Height="520" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Поля ввода -->
+            <RowDefinition Height="Auto"/>
+            <!-- Ошибка -->
+            <RowDefinition Height="*"/>
+            <!-- Пустое -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопки -->
+        </Grid.RowDefinitions>
+
+        <!-- Поля ввода -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <!-- Метки -->
+                <ColumnDefinition Width="*"/>
+                <!-- Поля -->
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <!-- Название -->
+                <RowDefinition Height="Auto"/>
+                <!-- Тип -->
+                <RowDefinition Height="Auto"/>
+                <!-- Значение -->
+                <RowDefinition Height="Auto"/>
+                <!-- Товар-условие -->
+                <RowDefinition Height="Auto"/>
+                <!-- Товар-подарок -->
+                <RowDefinition Height="Auto"/>
+                <!-- Дата начала -->
+                <RowDefinition Height="Auto"/>
+                <!-- Дата окончания -->
+                <RowDefinition Height="Auto"/>
+                <!-- Активна -->
+            </Grid.RowDefinitions>
+
+            <!-- Название -->
+            <Label Grid.Row="0" Grid.Column="0" Content="_Название: *" VerticalAlignment="Center" Target="{Binding ElementName=NameTextBox}"/>
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="NameTextBox" Margin="5" MaxLength="150"/>
+
+            <!-- Тип -->
+            <Label Grid.Row="1" Grid.Column="0" Content="_Тип: *" VerticalAlignment="Center" Target="{Binding ElementName=TypeComboBox}"/>
+            <ComboBox Grid.Row="1" Grid.Column="1" x:Name="TypeComboBox" Margin="5" SelectionChanged="TypeComboBox_SelectionChanged">
+                <ComboBoxItem Content="Процент"/>
+                <!-- Percentage -->
+                <ComboBoxItem Content="Сумма"/>
+                <!-- FixedAmount -->
+                <ComboBoxItem Content="Подарок"/>
+                <!-- Gift -->
+                <ComboBoxItem Content="Фикс. цена"/>
+                <!-- FixedPrice -->
+            </ComboBox>
+
+            <!-- Значение (для Процент/Сумма) -->
+            <Label Grid.Row="2" Grid.Column="0" Content="_Значение:" VerticalAlignment="Center" Target="{Binding ElementName=ValueTextBox}"/>
+            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                <TextBox x:Name="ValueTextBox" Width="100" Margin="5" PreviewTextInput="ValueTextBox_PreviewTextInput"/>
+                <TextBlock x:Name="ValueSuffixText" Text="%" VerticalAlignment="Center"/>
+                <!-- Динамически меняем на % или валюту -->
+            </StackPanel>
+
+
+            <!-- Товар-условие (ID или Код) -->
+            <Label Grid.Row="3" Grid.Column="0" Content="Товар (условие):" VerticalAlignment="Center" Target="{Binding ElementName=RequiredProductTextBox}"/>
+            <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal">
+                <TextBox x:Name="RequiredProductTextBox" Width="150" Margin="5"/>
+                <Button x:Name="FindRequiredProductButton" Content="&#xE71E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Width="40" Height="30" Margin="5,5,0,5" Click="FindRequiredProductButton_Click" ToolTip="Найти товар по коду/ШК"/>
+                <TextBlock x:Name="RequiredProductNameText" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="Gray"/>
+            </StackPanel>
+
+
+            <!-- Товар-подарок (ID или Код) (для Gift) -->
+            <Label Grid.Row="4" Grid.Column="0" Content="Товар (подарок):" VerticalAlignment="Center" Target="{Binding ElementName=GiftProductTextBox}"/>
+            <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                <TextBox x:Name="GiftProductTextBox" Width="150" Margin="5" IsEnabled="False"/>
+                <Button x:Name="FindGiftProductButton" Content="&#xE71E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Width="40" Height="30" Margin="5,5,0,5" Click="FindGiftProductButton_Click" ToolTip="Найти товар по коду/ШК" IsEnabled="False"/>
+                <TextBlock x:Name="GiftProductNameText" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="Gray"/>
+            </StackPanel>
+
+            <!-- Дата начала -->
+            <Label Grid.Row="5" Grid.Column="0" Content="Дата _начала:" VerticalAlignment="Center" Target="{Binding ElementName=StartDatePicker}"/>
+            <DatePicker Grid.Row="5" Grid.Column="1" x:Name="StartDatePicker" Margin="5"/>
+
+            <!-- Дата окончания -->
+            <Label Grid.Row="6" Grid.Column="0" Content="Дата _окончания:" VerticalAlignment="Center" Target="{Binding ElementName=EndDatePicker}"/>
+            <DatePicker Grid.Row="6" Grid.Column="1" x:Name="EndDatePicker" Margin="5"/>
+
+            <!-- Активна -->
+            <Label Grid.Row="7" Grid.Column="0" Content="_Активна:" VerticalAlignment="Center"/>
+            <CheckBox Grid.Row="7" Grid.Column="1" x:Name="IsActiveCheckBox" IsChecked="True" VerticalAlignment="Center" Margin="5"/>
+
+        </Grid>
+
+        <!-- Ошибка -->
+        <TextBlock Grid.Row="1" x:Name="ErrorText" Foreground="Red" Margin="0,10,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="SaveButton" Content="Сохранить" Width="100" Height="30" IsDefault="True" Click="SaveButton_Click"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True"/>
+        </StackPanel>
+
+    </Grid>
+</Window>

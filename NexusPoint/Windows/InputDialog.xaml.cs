@@ -19,47 +19,83 @@ namespace NexusPoint.Windows
     /// </summary>
     public partial class InputDialog : Window
     {
-        // Публичное свойство для доступа к введенному тексту
         public string InputText { get; private set; }
 
-        // Конструктор, принимающий заголовок окна, текст запроса и значение по умолчанию
-        public InputDialog(string windowTitle, string prompt, string defaultValue = "")
+        private bool _isPasswordMode = false; // Флаг режима пароля
+
+        // Обновленный конструктор
+        public InputDialog(string windowTitle, string prompt, string defaultValue = "", bool isPassword = false)
         {
             InitializeComponent();
-            this.Title = windowTitle; // Устанавливаем заголовок окна
-            PromptText.Text = prompt; // Устанавливаем текст запроса
-            InputTextBox.Text = defaultValue; // Устанавливаем значение по умолчанию
-        }
+            this.Title = windowTitle;
+            PromptText.Text = prompt;
+            _isPasswordMode = isPassword;
 
-        // Загрузка окна: установить фокус и выделить текст
-        private void Window_Loaded(object sender, RoutedEventArgs e)
-        {
-            InputTextBox.Focus();
-            InputTextBox.SelectAll(); // Выделяем весь текст для удобства замены
-        }
-
-        // Нажатие Enter в TextBox = нажатие OK
-        private void InputTextBox_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter)
+            if (_isPasswordMode)
             {
-                // Не вызываем OkButton_Click напрямую, чтобы обработчик IsDefault сработал корректно
-                // Просто имитируем завершение редактирования
-                OkButton.Focus(); // Переводим фокус для срабатывания IsDefault
+                // Если режим пароля, скрываем TextBox и показываем PasswordBox
+                InputTextBox.Visibility = Visibility.Collapsed;
+                // Создаем PasswordBox динамически или имеем его в XAML и просто показываем
+                PasswordInputBox.Visibility = Visibility.Visible;
+                PasswordInputBox.Password = defaultValue; // Устанавливаем значение по умолчанию (если нужно)
+            }
+            else
+            {
+                // Обычный режим, показываем TextBox
+                PasswordInputBox.Visibility = Visibility.Collapsed;
+                InputTextBox.Visibility = Visibility.Visible;
+                InputTextBox.Text = defaultValue;
             }
         }
 
-        // Нажатие кнопки OK
-        private void OkButton_Click(object sender, RoutedEventArgs e)
+        private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            InputText = InputTextBox.Text; // Сохраняем введенный текст
-            this.DialogResult = true;      // Устанавливаем результат и закрываем окно
+            if (_isPasswordMode)
+            {
+                PasswordInputBox.Focus();
+                // Выделение всего текста в PasswordBox не работает стандартно
+            }
+            else
+            {
+                InputTextBox.Focus();
+                InputTextBox.SelectAll();
+            }
         }
 
-        // Нажатие кнопки Отмена
+        // Нажатие Enter в TextBox
+        private void InputTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (!_isPasswordMode && e.Key == Key.Enter)
+            {
+                OkButton.Focus();
+            }
+        }
+
+        // Нажатие Enter в PasswordBox
+        private void PasswordInputBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (_isPasswordMode && e.Key == Key.Enter)
+            {
+                OkButton.Focus();
+            }
+        }
+
+        // Нажатие OK
+        private void OkButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Получаем текст из активного поля
+            InputText = _isPasswordMode ? PasswordInputBox.Password : InputTextBox.Text;
+            this.DialogResult = true;
+        }
+
+        // Нажатие Отмена
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            this.DialogResult = false;     // Устанавливаем результат и закрываем окно
+            this.DialogResult = false;
         }
+
+        // --- Элемент PasswordBox нужно добавить в XAML ---
+        // Поле для хранения ссылки на PasswordBox из XAML
+        private PasswordBox PasswordInputBox => (PasswordBox)this.FindName("InternalPasswordBox");
     }
 }

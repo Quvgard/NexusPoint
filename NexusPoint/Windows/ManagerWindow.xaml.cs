@@ -191,26 +191,27 @@ namespace NexusPoint.Windows
 
         private void AddProductButton_Click(object sender, RoutedEventArgs e)
         {
-            // Открываем диалоговое окно для добавления товара
-            // var addProductDialog = new AddEditProductWindow(); // Нужно создать это окно
-            // if (addProductDialog.ShowDialog() == true)
-            // {
-            //     LoadProducts(); // Обновляем список, если товар добавлен
-            // }
-            MessageBox.Show("Логика добавления товара (через диалоговое окно) еще не реализована.");
+            var addProductDialog = new AddEditProductWindow(); // Вызываем конструктор добавления
+            addProductDialog.Owner = this; // Устанавливаем владельца
+            if (addProductDialog.ShowDialog() == true)
+            {
+                LoadProducts(); // Обновляем список, если товар добавлен
+                // Можно также обновить список остатков, т.к. для нового товара создается запись
+                LoadStockItems();
+            }
         }
 
         private void EditProductButton_Click(object sender, RoutedEventArgs e)
         {
             if (ProductsDataGrid.SelectedItem is Product selectedProduct)
             {
-                // Открываем диалоговое окно для редактирования, передавая товар
-                // var editProductDialog = new AddEditProductWindow(selectedProduct); // Перегруженный конструктор
-                // if (editProductDialog.ShowDialog() == true)
-                // {
-                //     LoadProducts(); // Обновляем список
-                // }
-                MessageBox.Show($"Логика редактирования товара ID: {selectedProduct.ProductId} (через диалоговое окно) еще не реализована.");
+                var editProductDialog = new AddEditProductWindow(selectedProduct); // Вызываем конструктор редактирования
+                editProductDialog.Owner = this;
+                if (editProductDialog.ShowDialog() == true)
+                {
+                    LoadProducts(); // Обновляем список
+                    // Обновление остатков не требуется, т.к. меняется только каталог
+                }
             }
             else
             {
@@ -266,13 +267,13 @@ namespace NexusPoint.Windows
 
         private void AdjustStockButton_Click(object sender, RoutedEventArgs e)
         {
-            // Открываем диалоговое окно для приемки/списания/корректировки
-            // var adjustStockDialog = new AdjustStockWindow(); // Нужно создать это окно
-            // if(adjustStockDialog.ShowDialog() == true)
-            // {
-            //      LoadStockItems(); // Обновляем остатки
-            // }
-            MessageBox.Show("Логика приемки/корректировки остатков (через диалоговое окно) еще не реализована.");
+            var adjustStockDialog = new AdjustStockWindow();
+            adjustStockDialog.Owner = this;
+            if (adjustStockDialog.ShowDialog() == true) // Или можно не проверять результат, если окно само сообщает об успехе
+            {
+                // Обновляем список остатков ПОСЛЕ успешной корректировки
+                LoadStockItems(StockSearchTextBox.Text); // Обновляем с учетом текущего поиска
+            }
         }
 
         // --- Обработчики кнопок вкладки "Пользователи" ---
@@ -280,24 +281,24 @@ namespace NexusPoint.Windows
 
         private void AddUserButton_Click(object sender, RoutedEventArgs e)
         {
-            // var addUserDialog = new AddEditUserWindow(); // Нужно создать
-            // if(addUserDialog.ShowDialog() == true)
-            // {
-            //      LoadUsers();
-            // }
-            MessageBox.Show("Логика добавления пользователя (через диалоговое окно) еще не реализована.");
+            var addUserDialog = new AddEditUserWindow();
+            addUserDialog.Owner = this;
+            if (addUserDialog.ShowDialog() == true)
+            {
+                LoadUsers(); // Обновляем список
+            }
         }
 
         private void EditUserButton_Click(object sender, RoutedEventArgs e)
         {
             if (UsersDataGrid.SelectedItem is User selectedUser)
             {
-                // var editUserDialog = new AddEditUserWindow(selectedUser); // Передаем пользователя
-                // if(editUserDialog.ShowDialog() == true)
-                // {
-                //      LoadUsers();
-                // }
-                MessageBox.Show($"Логика редактирования пользователя {selectedUser.Username} (через диалоговое окно) еще не реализована.");
+                var editUserDialog = new AddEditUserWindow(selectedUser); // Передаем пользователя
+                editUserDialog.Owner = this;
+                if (editUserDialog.ShowDialog() == true)
+                {
+                    LoadUsers(); // Обновляем список
+                }
             }
             else
             {
@@ -309,24 +310,34 @@ namespace NexusPoint.Windows
         {
             if (UsersDataGrid.SelectedItem is User selectedUser)
             {
-                // Можно открыть простой диалог для ввода нового пароля
-                // или сразу сгенерировать временный
-                var result = MessageBox.Show($"Сбросить пароль для пользователя {selectedUser.Username}?", "Сброс пароля", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (result == MessageBoxResult.Yes)
+                // Можно использовать AddEditUserWindow для сброса, но это может быть неудобно
+                // Лучше сделать отдельный ResetPasswordDialog или простой InputDialog
+
+                var passwordDialog = new InputDialog($"Сброс пароля для {selectedUser.Username}", "Введите НОВЫЙ пароль:", isPassword: true); // Добавить isPassword в InputDialog?
+                passwordDialog.Owner = this;
+                if (passwordDialog.ShowDialog() == true)
                 {
-                    // var newPasswordDialog = new ResetPasswordDialog(); // Нужно создать
-                    // if (newPasswordDialog.ShowDialog() == true)
-                    // {
-                    //     string newPlainPassword = newPasswordDialog.NewPassword;
-                    //     try
-                    //     {
-                    //        if (_userRepository.UpdateUserPassword(selectedUser.UserId, newPlainPassword))
-                    //         {
-                    //            MessageBox.Show("Пароль успешно сброшен.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
-                    //         } else { /*...*/ }
-                    //     } catch (Exception ex) { /*...*/ }
-                    // }
-                    MessageBox.Show($"Логика сброса пароля для {selectedUser.Username} (через диалог) еще не реализована.");
+                    string newPlainPassword = passwordDialog.InputText; // InputText вернет пароль
+                    if (string.IsNullOrEmpty(newPlainPassword) || newPlainPassword.Length < 4)
+                    {
+                        MessageBox.Show("Пароль не может быть пустым и должен содержать не менее 4 символов.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                    try
+                    {
+                        if (_userRepository.UpdateUserPassword(selectedUser.UserId, newPlainPassword))
+                        {
+                            MessageBox.Show("Пароль успешно сброшен.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show("Не удалось сбросить пароль.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Ошибка при сбросе пароля: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
                 }
             }
             else
@@ -374,14 +385,24 @@ namespace NexusPoint.Windows
 
         private void AddDiscountButton_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Логика добавления акции (через диалоговое окно) еще не реализована.");
+            var addDiscountDialog = new AddEditDiscountWindow();
+            addDiscountDialog.Owner = this;
+            if (addDiscountDialog.ShowDialog() == true)
+            {
+                LoadDiscounts(); // Обновляем список
+            }
         }
 
         private void EditDiscountButton_Click(object sender, RoutedEventArgs e)
         {
             if (DiscountsDataGrid.SelectedItem is Discount selectedDiscount)
             {
-                MessageBox.Show($"Логика редактирования акции {selectedDiscount.Name} (через диалоговое окно) еще не реализована.");
+                var editDiscountDialog = new AddEditDiscountWindow(selectedDiscount);
+                editDiscountDialog.Owner = this;
+                if (editDiscountDialog.ShowDialog() == true)
+                {
+                    LoadDiscounts(); // Обновляем список
+                }
             }
             else
             {

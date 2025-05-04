@@ -99,12 +99,29 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="BusinessLogic\DiscountCalculator.cs" />
     <Compile Include="Utils\Converters\BooleanToSaleReturnConverter.cs" />
     <Compile Include="Utils\Converters\IndexConverter.cs" />
     <Compile Include="Utils\Converters\MarkingCodeToSymbolConverter.cs" />
     <Compile Include="Utils\PasswordHasher.cs" />
+    <Compile Include="Utils\PrinterService.cs" />
+    <Compile Include="Windows\AddEditDiscountWindow.xaml.cs">
+      <DependentUpon>AddEditDiscountWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\AddEditProductWindow.xaml.cs">
+      <DependentUpon>AddEditProductWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\AddEditUserWindow.xaml.cs">
+      <DependentUpon>AddEditUserWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\AdjustStockWindow.xaml.cs">
+      <DependentUpon>AdjustStockWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Windows\CashierWindow.xaml.cs">
       <DependentUpon>CashierWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\DiscountDialog.xaml.cs">
+      <DependentUpon>DiscountDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Windows\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
@@ -148,7 +165,27 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="Windows\AddEditDiscountWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\AddEditProductWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\AddEditUserWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\AdjustStockWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="Windows\CashierWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\DiscountDialog.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -218,7 +255,6 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="BusinessLogic\" />
     <Folder Include="UserControls\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

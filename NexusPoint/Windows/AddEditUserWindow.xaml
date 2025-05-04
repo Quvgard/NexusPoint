@@ -1,0 +1,88 @@
+﻿<Window x:Class="NexusPoint.Windows.AddEditUserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NexusPoint.Windows"
+        mc:Ignorable="d"
+        Title="Добавление/Редактирование пользователя" Height="430" Width="450"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Поля ввода -->
+            <RowDefinition Height="Auto"/>
+            <!-- Ошибка -->
+            <RowDefinition Height="*"/>
+            <!-- Пустое -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопки -->
+        </Grid.RowDefinitions>
+
+        <!-- Поля ввода -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <!-- Метки -->
+                <ColumnDefinition Width="*"/>
+                <!-- Поля -->
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <!-- Логин -->
+                <RowDefinition Height="Auto"/>
+                <!-- ФИО -->
+                <RowDefinition Height="Auto"/>
+                <!-- Роль -->
+                <RowDefinition Height="Auto"/>
+                <!-- Пароль -->
+                <RowDefinition Height="Auto"/>
+                <!-- Подтв. Пароля -->
+                <RowDefinition Height="Auto"/>
+                <!-- Инфо про пароль -->
+            </Grid.RowDefinitions>
+
+            <!-- Логин (ШК) -->
+            <Label Grid.Row="0" Grid.Column="0" Content="_Логин (ШК): *" VerticalAlignment="Center" Target="{Binding ElementName=UsernameTextBox}"/>
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="UsernameTextBox" Margin="5" MaxLength="50"/>
+
+            <!-- ФИО -->
+            <Label Grid.Row="1" Grid.Column="0" Content="_ФИО: *" VerticalAlignment="Center" Target="{Binding ElementName=FullNameTextBox}"/>
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="FullNameTextBox" Margin="5" MaxLength="100"/>
+
+            <!-- Роль -->
+            <Label Grid.Row="2" Grid.Column="0" Content="_Роль: *" VerticalAlignment="Center" Target="{Binding ElementName=RoleComboBox}"/>
+            <ComboBox Grid.Row="2" Grid.Column="1" x:Name="RoleComboBox" Margin="5">
+                <ComboBoxItem Content="Cashier"/>
+                <ComboBoxItem Content="Manager"/>
+                <ComboBoxItem Content="Admin"/>
+            </ComboBox>
+
+            <!-- Пароль -->
+            <Label Grid.Row="3" Grid.Column="0" x:Name="PasswordLabel" Content="_Пароль: *" VerticalAlignment="Center" Target="{Binding ElementName=PasswordBox}"/>
+            <PasswordBox Grid.Row="3" Grid.Column="1" x:Name="PasswordBox" Margin="5"/>
+
+            <!-- Подтверждение пароля -->
+            <Label Grid.Row="4" Grid.Column="0" x:Name="ConfirmPasswordLabel" Content="_Подтвердите пароль: *" VerticalAlignment="Center" Target="{Binding ElementName=ConfirmPasswordBox}"/>
+            <PasswordBox Grid.Row="4" Grid.Column="1" x:Name="ConfirmPasswordBox" Margin="5"/>
+
+            <!-- Инфо про пароль для режима редактирования -->
+            <TextBlock Grid.Row="5" Grid.Column="1" x:Name="PasswordInfoText" Text="(оставьте пустым, чтобы не менять)" FontSize="10" Foreground="Gray" Margin="5,0,5,5" Visibility="Collapsed"/>
+
+        </Grid>
+
+        <!-- Ошибка -->
+        <TextBlock Grid.Row="1" x:Name="ErrorText" Foreground="Red" Margin="0,10,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="SaveButton" Content="Сохранить" Width="100" Height="30" IsDefault="True" Click="SaveButton_Click"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True"/>
+        </StackPanel>
+
+    </Grid>
+</Window>

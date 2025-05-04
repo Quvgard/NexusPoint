@@ -1,5 +1,6 @@
 ﻿using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
+using NexusPoint.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -296,7 +297,7 @@ namespace NexusPoint.Windows
             sb.AppendLine("--- КОНЕЦ КОПИИ ---");
 
 
-            MessageBox.Show(sb.ToString(), "Имитация печати копии чека", MessageBoxButton.OK, MessageBoxImage.Information);
+            PrinterService.Print($"Копия чека №{check.CheckNumber}", sb.ToString());
             ShowError("Копия чека 'отправлена на печать'.", isInfo: true);
         }
 
