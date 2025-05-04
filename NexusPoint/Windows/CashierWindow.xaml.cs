@@ -55,12 +55,6 @@ namespace NexusPoint.Windows
             set { _discountAmount = value; OnPropertyChanged(); OnPropertyChanged(nameof(CalculatedItemTotalAmount)); }
         }
 
-        private string _markingCode;
-        public new string MarkingCode
-        {
-            get => _markingCode;
-            set { _markingCode = value; OnPropertyChanged(); }
-        }
         // --- Конец переопределения свойств ---
 
         // Свойства только для отображения (зависят от других)
@@ -87,7 +81,6 @@ namespace NexusPoint.Windows
             this._quantity = baseItem.Quantity;
             this._priceAtSale = baseItem.PriceAtSale;
             this._discountAmount = baseItem.DiscountAmount;
-            this._markingCode = baseItem.MarkingCode;
 
             // Устанавливаем продукт
             this.Product = product; // Это вызовет OnPropertyChanged для Product и ProductName
@@ -302,29 +295,10 @@ namespace NexusPoint.Windows
                     // return; // Пока блокируем добавление
                 }
 
-                // --- Обработка маркировки ---
-                string markingCode = null;
-                if (product.IsMarked)
-                {
-                    // Открываем простое окно для ввода марки
-                    var markingDialog = new InputDialog("Маркировка", $"Отсканируйте/введите код маркировки для\n'{product.Name}':");
-                    if (markingDialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(markingDialog.InputText))
-                    {
-                        markingCode = markingDialog.InputText.Trim();
-                        // Здесь может быть логика валидации марки (длина, формат, проверка по базе - пока пропускаем)
-                    }
-                    else
-                    {
-                        ShowTemporaryStatusMessage("Добавление товара отменено: не указан код маркировки.");
-                        LastItemInfoText.Text = "- Добавление отменено (нет марки) -";
-                        return; // Отмена, если марка не введена
-                    }
-                }
-
                 // --- Добавление или обновление количества ---
-                var existingItem = CurrentCheckItems.FirstOrDefault(item => item.ProductId == product.ProductId && item.MarkingCode == markingCode); // Ищем точно такой же товар (с такой же маркой, если есть)
+                var existingItem = CurrentCheckItems.FirstOrDefault(item => item.ProductId == product.ProductId); // Ищем точно такой же товар (с такой же маркой, если есть)
 
-                if (existingItem != null && !product.IsMarked) // Увеличиваем кол-во только для немаркированных
+                if (existingItem != null) // Увеличиваем кол-во только для немаркированных
                 {
                     existingItem.Quantity += 1;
                 }
@@ -336,8 +310,7 @@ namespace NexusPoint.Windows
                             ProductId = product.ProductId,
                             Quantity = 1,
                             PriceAtSale = product.Price,
-                            DiscountAmount = 0,
-                            MarkingCode = markingCode
+                            DiscountAmount = 0
                         },
                         product // Передаем найденный продукт
                     );
@@ -349,7 +322,7 @@ namespace NexusPoint.Windows
 
 
                 // Обновляем информацию о последнем товаре и итоги
-                LastItemInfoText.Text = $"Добавлено: {product.Name}\nЦена: {product.Price:C}\nКод: {product.ProductCode}" + (markingCode != null ? $"\nМарка: {markingCode.Substring(0, Math.Min(markingCode.Length, 15))}..." : "");
+                LastItemInfoText.Text = $"Добавлено: {product.Name}\nЦена: {product.Price:C}\nКод: {product.ProductCode}";
                 UpdateTotals();
             }
             catch (Exception ex)
@@ -523,13 +496,6 @@ namespace NexusPoint.Windows
         {
             if (CheckListView.SelectedItem is CheckItemView selectedItem)
             {
-                // Нельзя менять кол-во маркированного товара после добавления
-                if (!string.IsNullOrEmpty(selectedItem.MarkingCode))
-                {
-                    MessageBox.Show("Нельзя изменить количество для маркированного товара.\nУдалите позицию и добавьте заново.", "Операция невозможна", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
                 // Открываем диалог для ввода нового количества
                 var quantityDialog = new InputDialog("Количество", $"Введите новое количество для '{selectedItem.ProductName}':", selectedItem.Quantity.ToString());
 
@@ -570,11 +536,6 @@ namespace NexusPoint.Windows
         {
             if (CheckListView.SelectedItem is CheckItemView selectedItem)
             {
-                // Можно добавить подтверждение
-                // var result = MessageBox.Show($"Удалить '{selectedItem.ProductName}' из чека?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                // if (result == MessageBoxResult.No) return;
-
-                // TODO: Если нужно сканировать марку при удалении - добавить диалог
 
                 CurrentCheckItems.Remove(selectedItem); // Удаляем из коллекции (UI обновится)
                 UpdateTotals();

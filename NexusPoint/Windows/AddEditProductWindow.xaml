@@ -54,10 +54,10 @@
             <Label Grid.Row="3" Grid.Column="0" Content="_Цена: *" VerticalAlignment="Center" Target="{Binding ElementName=PriceTextBox}"/>
             <TextBox Grid.Row="3" Grid.Column="1" x:Name="PriceTextBox" Margin="5" PreviewTextInput="PriceTextBox_PreviewTextInput"/>
 
-            <!-- Маркированный -->
-            <Label Grid.Row="4" Grid.Column="0" Content="_Маркированный:" VerticalAlignment="Center"/>
-            <CheckBox Grid.Row="4" Grid.Column="1" x:Name="IsMarkedCheckBox" VerticalAlignment="Center" Margin="5"/>
-
+            <!-- Описание -->
+            <Label Grid.Row="4" Grid.Column="0" Content="О_писание:" VerticalAlignment="Top" Target="{Binding ElementName=DescriptionTextBox}"/>
+            <TextBox Grid.Row="4" Grid.Column="1" x:Name="DescriptionTextBox" Margin="5" Height="80" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+            
         </Grid>
 
         <!-- Ошибка -->

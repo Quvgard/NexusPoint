@@ -59,8 +59,8 @@ namespace NexusPoint.Data.Repositories
 
                         // 2. Вставить позиции чека
                         string insertItemQuery = @"
-                            INSERT INTO CheckItems (CheckId, ProductId, Quantity, PriceAtSale, ItemTotalAmount, DiscountAmount, MarkingCode)
-                            VALUES (@CheckId, @ProductId, @Quantity, @PriceAtSale, @ItemTotalAmount, @DiscountAmount, @MarkingCode);";
+                           INSERT INTO CheckItems (CheckId, ProductId, Quantity, PriceAtSale, ItemTotalAmount, DiscountAmount)
+                            VALUES (@CheckId, @ProductId, @Quantity, @PriceAtSale, @ItemTotalAmount, @DiscountAmount);";
 
                         foreach (var item in check.Items)
                         {

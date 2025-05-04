@@ -52,7 +52,6 @@
                             <DataGridTextColumn Header="Наименование" Binding="{Binding Name}" Width="*"/>
                             <DataGridTextColumn Header="Штрих-код" Binding="{Binding Barcode}" Width="130"/>
                             <DataGridTextColumn Header="Цена" Binding="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="80"/>
-                            <DataGridCheckBoxColumn Header="Марк." Binding="{Binding IsMarked}" Width="50"/>
                             <DataGridTextColumn Header="ID" Binding="{Binding ProductId}" Width="50"/>
                         </DataGrid.Columns>
                     </DataGrid>
@@ -178,7 +177,14 @@
             <StatusBarItem>
                 <TextBlock x:Name="UserInfoStatusBarText" Text="Пользователь: "/>
             </StatusBarItem>
-            <!-- Можно добавить другие элементы в статус бар -->
+            <!-- Можно добавить разделитель -->
+            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" />
+            <!-- Кнопка выхода справа -->
+            <StatusBarItem HorizontalAlignment="Right">
+                <Button x:Name="LogoutButton" Content="Выход из системы" Padding="5,2" Margin="0,0,5,0"
+                        Click="LogoutButton_Click" ToolTip="Завершить сеанс и вернуться к выбору режима"/>
+            </StatusBarItem>
+            <!-- Можно добавить другие элементы справа, если нужно -->
         </StatusBar>
 
     </Grid>

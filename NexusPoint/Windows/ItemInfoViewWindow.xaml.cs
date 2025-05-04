@@ -97,11 +97,11 @@ namespace NexusPoint.Windows
             CultureInfo culture = CultureInfo.CurrentCulture; // Или GetCultureInfo("ru-RU")
 
             ItemNameText.Text = product.Name;
+            ItemDescriptionText.Text = product.Description ?? "-";
             ItemCodeText.Text = product.ProductCode;
             ItemBarcodeText.Text = product.Barcode ?? "-"; // Показываем прочерк, если ШК нет
             ItemPriceText.Text = product.Price.ToString("C", culture);
             ItemStockText.Text = stockQuantity.ToString("N", culture); // "N" - числовой формат с разделителями
-            ItemMarkedText.Text = product.IsMarked ? "Да" : "Нет";
 
             ItemInfoGrid.Visibility = Visibility.Visible; // Показываем панель с информацией
             ItemInputTextBox.Focus(); // Возвращаем фокус на ввод для следующего поиска
@@ -113,11 +113,11 @@ namespace NexusPoint.Windows
         {
             ItemInfoGrid.Visibility = Visibility.Collapsed; // Скрываем панель
             ItemNameText.Text = string.Empty;
+            ItemDescriptionText.Text = string.Empty;
             ItemCodeText.Text = string.Empty;
             ItemBarcodeText.Text = string.Empty;
             ItemPriceText.Text = string.Empty;
             ItemStockText.Text = string.Empty;
-            ItemMarkedText.Text = string.Empty;
         }
 
         // Показ/Скрытие ошибки

@@ -15,8 +15,6 @@
     <Window.Resources>
         <!-- Конвертер для получения индекса элемента в ListView -->
         <converters:IndexConverter x:Key="IndexConverter"/>
-        <!-- Конвертер для отображения символа маркировки -->
-        <converters:MarkingCodeToSymbolConverter x:Key="MarkingCodeToSymbolConverter"/>
     </Window.Resources>
     
     <Grid Background="#F0F0F0">
@@ -70,13 +68,6 @@
                         <GridViewColumn Header="Сумма"
                                         DisplayMemberBinding="{Binding CalculatedItemTotalAmount, StringFormat={}{0:C2}, ConverterCulture=ru-RU}"
                                         Width="100"/>
-                        <GridViewColumn Header="Марк." Width="50">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding MarkingCode, Converter={StaticResource MarkingCodeToSymbolConverter}}" HorizontalAlignment="Center" FontWeight="Bold"/>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
                     </GridView>
                 </ListView.View>
                 <!-- Контекстное меню для элемента (опционально) -->

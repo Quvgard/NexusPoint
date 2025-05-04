@@ -262,8 +262,7 @@ namespace NexusPoint.Windows
             foreach (var item in check.Items)
             {
                 string productName = products.TryGetValue(item.ProductId, out Product p) ? p.Name : "<Товар?>";
-                string markingSymbol = !string.IsNullOrEmpty(item.MarkingCode) ? "[M] " : "";
-                sb.AppendLine($"{markingSymbol}{productName}");
+                sb.AppendLine($"{productName}");
                 sb.AppendLine($"  {item.Quantity} x {item.PriceAtSale:N2} = {item.Quantity * item.PriceAtSale:N2}");
                 if (item.DiscountAmount > 0)
                 {

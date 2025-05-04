@@ -13,7 +13,6 @@
     <Window.Resources>
         <!-- Подключаем конвертеры, если они не в глобальных ресурсах -->
         <converters:IndexConverter x:Key="IndexConverter"/>
-        <converters:MarkingCodeToSymbolConverter x:Key="MarkingCodeToSymbolConverter"/>
     </Window.Resources>
     <Grid Margin="15">
         <Grid.RowDefinitions>
@@ -83,13 +82,6 @@
                     <GridViewColumn Header="Цена" DisplayMemberBinding="{Binding PriceAtSale, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="90"/>
                     <GridViewColumn Header="Скидка" DisplayMemberBinding="{Binding DiscountAmount, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="80"/>
                     <GridViewColumn Header="Сумма" DisplayMemberBinding="{Binding OriginalItemTotalAmount, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="100"/>
-                    <GridViewColumn Header="Марк." Width="50">
-                        <GridViewColumn.CellTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding MarkingCode, Converter={StaticResource MarkingCodeToSymbolConverter}}" HorizontalAlignment="Center" FontWeight="Bold"/>
-                            </DataTemplate>
-                        </GridViewColumn.CellTemplate>
-                    </GridViewColumn>
                 </GridView>
             </ListView.View>
         </ListView>

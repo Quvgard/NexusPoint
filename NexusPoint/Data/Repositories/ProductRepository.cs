@@ -70,15 +70,18 @@ namespace NexusPoint.Data.Repositories
                     try
                     {
                         string insertProductQuery = @"
-                            INSERT INTO Products (Barcode, ProductCode, Name, Price, IsMarked)
-                            VALUES (@Barcode, @ProductCode, @Name, @Price, @IsMarked);
+                            INSERT INTO Products (Barcode, ProductCode, Name, Description, Price)
+                            VALUES (@Barcode, @ProductCode, @Name, @Description, @Price);
                             SELECT last_insert_rowid();";
                         int newProductId = connection.QuerySingle<int>(insertProductQuery, product, transaction); // Выполняем в транзакции
 
                         // Убеждаемся, что для нового товара есть запись остатка
-                        EnsureStockItemExists(newProductId, connection, transaction);
+                        // EnsureStockItemExists(newProductId, connection, transaction); // Вызываем метод из StockItemRepository
+                        // Лучше сделать так:
+                        var stockRepo = new StockItemRepository(); // Создаем экземпляр здесь
+                        stockRepo.EnsureStockItemExists(newProductId, connection, transaction); // Вызываем метод
 
-                        transaction.Commit(); // Фиксируем изменения
+                        transaction.Commit();
                         return newProductId;
                     }
                     catch (Exception ex)
@@ -118,8 +121,8 @@ namespace NexusPoint.Data.Repositories
                         Barcode = @Barcode,
                         ProductCode = @ProductCode,
                         Name = @Name,
-                        Price = @Price,
-                        IsMarked = @IsMarked
+                        Description = @Description, 
+                        Price = @Price
                     WHERE ProductId = @ProductId";
                 return connection.Execute(query, product) > 0;
             }

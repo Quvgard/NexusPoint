@@ -39,8 +39,8 @@ namespace NexusPoint.Data
                         Barcode TEXT UNIQUE,
                         ProductCode TEXT NOT NULL UNIQUE,
                         Name TEXT NOT NULL,
-                        Price REAL NOT NULL,
-                        IsMarked INTEGER NOT NULL DEFAULT 0
+                        Description TEXT NULL,   
+                        Price REAL NOT NULL
                     );");
                     System.Diagnostics.Debug.WriteLine("Products (Catalog) table checked/created.");
 
@@ -125,7 +125,6 @@ namespace NexusPoint.Data
                         PriceAtSale REAL NOT NULL,
                         ItemTotalAmount REAL NOT NULL,
                         DiscountAmount REAL DEFAULT 0,
-                        MarkingCode TEXT NULL,
                         FOREIGN KEY (CheckId) REFERENCES Checks(CheckId) ON DELETE CASCADE,
                         FOREIGN KEY (ProductId) REFERENCES Products(ProductId)
                     );");

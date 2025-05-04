@@ -62,6 +62,27 @@ namespace NexusPoint.Windows
             LoadDiscounts();
         }
 
+
+        // --- Обработчик кнопки выхода ---
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Простое подтверждение выхода
+            MessageBoxResult result = MessageBox.Show("Вы уверены, что хотите выйти из системы?",
+                                                     "Выход",
+                                                     MessageBoxButton.YesNo,
+                                                     MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                // Создаем и показываем главное окно выбора режима
+                MainWindow mainWindow = new MainWindow();
+                mainWindow.Show();
+
+                // Закрываем текущее окно управления
+                this.Close();
+            }
+        }
+
         // --- Методы загрузки данных ---
 
         private void LoadProducts(string searchTerm = null)

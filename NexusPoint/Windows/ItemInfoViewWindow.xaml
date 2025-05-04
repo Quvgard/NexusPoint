@@ -54,26 +54,25 @@
                 <Label Grid.Row="0" Grid.Column="0" Content="Наименование:" FontWeight="Bold" Margin="0,3"/>
                 <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ItemNameText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="5,3"/>
 
+                <!-- Описание -->
+                <Label Grid.Row="1" Grid.Column="0" Content="Описание:" FontWeight="Bold" VerticalAlignment="Top" Margin="0,3"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ItemDescriptionText" TextWrapping="Wrap" VerticalAlignment="Top" Margin="5,3" MaxHeight="100"/>
+
                 <!-- Код (САП) -->
-                <Label Grid.Row="1" Grid.Column="0" Content="Код (САП):" FontWeight="Bold" Margin="0,3"/>
-                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ItemCodeText" VerticalAlignment="Center" Margin="5,3"/>
+                <Label Grid.Row="2" Grid.Column="0" Content="Код (САП):" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ItemCodeText" VerticalAlignment="Center" Margin="5,3"/>
 
                 <!-- Штрих-код -->
-                <Label Grid.Row="2" Grid.Column="0" Content="Штрих-код:" FontWeight="Bold" Margin="0,3"/>
-                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ItemBarcodeText" VerticalAlignment="Center" Margin="5,3"/>
+                <Label Grid.Row="3" Grid.Column="0" Content="Штрих-код:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ItemBarcodeText" VerticalAlignment="Center" Margin="5,3"/>
 
                 <!-- Цена -->
-                <Label Grid.Row="3" Grid.Column="0" Content="Цена:" FontWeight="Bold" Margin="0,3"/>
-                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ItemPriceText" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="5,3"/>
+                <Label Grid.Row="4" Grid.Column="0" Content="Цена:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="ItemPriceText" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="5,3"/>
 
                 <!-- Остаток -->
-                <Label Grid.Row="4" Grid.Column="0" Content="Остаток на складе:" FontWeight="Bold" Margin="0,3"/>
-                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="ItemStockText" VerticalAlignment="Center" Margin="5,3"/>
-
-                <!-- Маркировка -->
-                <Label Grid.Row="5" Grid.Column="0" Content="Маркированный:" FontWeight="Bold" Margin="0,3"/>
-                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="ItemMarkedText" VerticalAlignment="Center" Margin="5,3"/>
-
+                <Label Grid.Row="5" Grid.Column="0" Content="Остаток на складе:" FontWeight="Bold" Margin="0,3"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="ItemStockText" VerticalAlignment="Center" Margin="5,3"/>
             </Grid>
         </Border>
 

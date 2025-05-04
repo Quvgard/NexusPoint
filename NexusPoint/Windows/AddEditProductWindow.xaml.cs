@@ -44,9 +44,9 @@ namespace NexusPoint.Windows
             // Заполняем поля данными редактируемого товара
             ProductCodeTextBox.Text = _originalProduct.ProductCode;
             NameTextBox.Text = _originalProduct.Name;
+            DescriptionTextBox.Text = _originalProduct.Description;
             BarcodeTextBox.Text = _originalProduct.Barcode;
             PriceTextBox.Text = _originalProduct.Price.ToString(CultureInfo.CurrentCulture); // Форматируем цену
-            IsMarkedCheckBox.IsChecked = _originalProduct.IsMarked;
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -77,9 +77,9 @@ namespace NexusPoint.Windows
             // 1. Валидация ввода
             string productCode = ProductCodeTextBox.Text.Trim();
             string name = NameTextBox.Text.Trim();
+            string description = DescriptionTextBox.Text.Trim();
             string barcode = BarcodeTextBox.Text.Trim();
             string priceString = PriceTextBox.Text.Trim();
-            bool isMarked = IsMarkedCheckBox.IsChecked ?? false;
 
             if (string.IsNullOrWhiteSpace(productCode))
             {
@@ -136,9 +136,9 @@ namespace NexusPoint.Windows
 
             productToSave.ProductCode = productCode;
             productToSave.Name = name;
+            productToSave.Description = string.IsNullOrWhiteSpace(description) ? null : description;
             productToSave.Barcode = string.IsNullOrEmpty(barcode) ? null : barcode; // Сохраняем null, если ШК пустой
             productToSave.Price = Math.Round(price, 2); // Округляем цену
-            productToSave.IsMarked = isMarked;
 
             // 3. Сохранение в БД
             try

@@ -67,7 +67,6 @@ namespace NexusPoint.Windows
         public decimal PriceAtSale => OriginalItem.PriceAtSale;
         public decimal DiscountAmount => OriginalItem.DiscountAmount;
         public decimal OriginalItemTotalAmount => OriginalItem.Quantity * OriginalItem.PriceAtSale - OriginalItem.DiscountAmount; // Рассчитываем для показа
-        public string MarkingCode => OriginalItem.MarkingCode;
 
         // --- Рассчитываемая сумма для возвращаемого количества ---
         public decimal ReturnItemTotalAmount
@@ -90,10 +89,6 @@ namespace NexusPoint.Windows
             Product = product; // Может быть null, если товар удален
             // Изначально предлагаем вернуть все количество
             this._returnQuantity = baseItem.Quantity;
-            // Нельзя редактировать кол-во маркированного товара
-            // ВАЖНО: Если маркированных > 1 шт, то частичный возврат невозможен без скана КАЖДОЙ марки.
-            // Упрощаем: если позиция маркирована - возвращаем только всю позицию целиком (кол-во нельзя менять).
-            this.CanEditReturnQuantity = string.IsNullOrEmpty(baseItem.MarkingCode);
         }
 
 
@@ -334,29 +329,6 @@ namespace NexusPoint.Windows
                 { ShowError($"Нельзя вернуть {itemToReturnView.ReturnQuantity} шт. товара '{itemToReturnView.ProductName}', продано было {itemToReturnView.Quantity}."); return; }
                 if (itemToReturnView.ReturnQuantity <= 0) continue; // Пропускаем нулевые (хотя where выше должен был отсеять)
 
-                string scannedMarkingCode = itemToReturnView.MarkingCode; // Марка по умолчанию
-
-                // Запрос марки, если товар маркированный и частичный возврат не разрешен
-                if (itemToReturnView.Product != null && itemToReturnView.Product.IsMarked)
-                {
-                    if (itemToReturnView.ReturnQuantity != itemToReturnView.Quantity)
-                    {
-                        ShowError($"Частичный возврат маркированного товара '{itemToReturnView.ProductName}' не поддерживается. Верните всю позицию или не возвращайте ее.");
-                        return;
-                    }
-
-                    // Запрашиваем скан марки
-                    var markingDialog = new InputDialog("Возврат маркированного товара",
-                        $"Отсканируйте/введите КОД МАРКИРОВКИ возвращаемого товара:\n'{itemToReturnView.ProductName}'", "");
-                    if (markingDialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(markingDialog.InputText))
-                    {
-                        scannedMarkingCode = markingDialog.InputText.Trim();
-                        // TODO: Здесь может быть дополнительная валидация марки
-                    }
-                    else
-                    { ShowError($"Возврат отменен: не указан код маркировки для '{itemToReturnView.ProductName}'."); return; }
-                }
-
                 // Создаем позицию для чека возврата
                 decimal quantityRatio = itemToReturnView.Quantity > 0 ? itemToReturnView.ReturnQuantity / itemToReturnView.Quantity : 0;
                 returnCheckItems.Add(new CheckItem
@@ -365,8 +337,7 @@ namespace NexusPoint.Windows
                     Quantity = itemToReturnView.ReturnQuantity,
                     PriceAtSale = itemToReturnView.PriceAtSale,
                     DiscountAmount = Math.Round(itemToReturnView.DiscountAmount * quantityRatio, 2),
-                    ItemTotalAmount = Math.Round(itemToReturnView.OriginalItemTotalAmount * quantityRatio, 2), // Используем OriginalItemTotalAmount для пропорции
-                    MarkingCode = scannedMarkingCode
+                    ItemTotalAmount = Math.Round(itemToReturnView.OriginalItemTotalAmount * quantityRatio, 2)
                 });
             }
 
@@ -437,7 +408,7 @@ namespace NexusPoint.Windows
                 rkoSb.AppendLine($"                              (Ф.И.О.)");
                 rkoSb.AppendLine($"Основание:      Возврат товара по чеку №{_originalCheck.CheckNumber} от {_originalCheck.Timestamp:d}");
                 rkoSb.AppendLine($"Сумма:          {savedReturnCheck.TotalAmount:N2} руб.");
-                rkoSb.AppendLine($"                ({Utils.Converters.AmountToWordsConverter.Convert(savedReturnCheck.TotalAmount)})"); // СУММА ПРОПИСЬЮ (НУЖЕН КОНВЕРТЕР!)
+                rkoSb.AppendLine($"                ({Utils.Converters.AmountToWordsConverter.Convert(savedReturnCheck.TotalAmount)})"); // СУММА ПРОПИСЬЮ 
                 rkoSb.AppendLine($"Приложение:     Чек №{savedReturnCheck.CheckNumber}");
                 rkoSb.AppendLine("\n");
                 rkoSb.AppendLine("Получил:        ____________________  _____________________");
