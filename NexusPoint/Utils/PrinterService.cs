@@ -54,8 +54,8 @@ namespace NexusPoint.Utils
         // Можно добавить другие методы, например, для открытия денежного ящика (если он подключен к принтеру)
         public static void OpenCashDrawer()
         {
-            Debug.WriteLine("--- SIMULATE: Open Cash Drawer ---");
-            MessageBox.Show("ДЗЫНЬ! (Имитация открытия денежного ящика)", "Денежный ящик", MessageBoxButton.OK, MessageBoxImage.Information);
+            Debug.WriteLine("--- Open Cash Drawer ---");
+            MessageBox.Show("Касса открыта", "Денежный ящик", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 }

@@ -88,7 +88,8 @@ namespace NexusPoint.Windows
             OriginalItem = baseItem ?? throw new ArgumentNullException(nameof(baseItem));
             Product = product; // Может быть null, если товар удален
             // Изначально предлагаем вернуть все количество
-            this._returnQuantity = baseItem.Quantity;
+            this._returnQuantity = 0m;
+            CanEditReturnQuantity = true; // Пока всегда разрешаем (убрали маркировку)
         }
 
 
@@ -200,6 +201,16 @@ namespace NexusPoint.Windows
             OriginalCheckNumberText.Text = $"{_originalCheck.CheckNumber} (ID: {_originalCheck.CheckId})";
             OriginalCheckDateText.Text = _originalCheck.Timestamp.ToString("g");
 
+            string paymentTypeDisplay = _originalCheck.PaymentType;
+            switch (_originalCheck.PaymentType?.ToLower()) // Приводим к нижнему регистру для надежности
+            {
+                case "cash": paymentTypeDisplay = "Наличные"; break;
+                case "card": paymentTypeDisplay = "Карта"; break;
+                case "mixed": paymentTypeDisplay = "Смешанная"; break;
+                    // Добавьте другие типы, если они есть
+            }
+            OriginalPaymentTypeText.Text = paymentTypeDisplay;
+
             _originalCheckItemsView.Clear();
 
             StatusText.Text = "Загрузка названий товаров...";
@@ -221,66 +232,49 @@ namespace NexusPoint.Windows
         {
             _originalCheck = null;
             _originalCheckItemsView.Clear();
+            OriginalPaymentTypeText.Text = ""; // Очищаем новое поле
             CheckInfoPanel.Visibility = Visibility.Collapsed;
             ActionPanel.Visibility = Visibility.Collapsed;
             ProcessReturnButton.IsEnabled = false;
         }
 
-        // Кнопка "Вернуть весь чек"
-        private void ReturnAllButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_originalCheck == null) return;
-            foreach (var item in _originalCheckItemsView)
-            {
-                // Сбрасываем количество на полное, если можно редактировать (не маркированный)
-                // Или оставляем как есть (полное), если нельзя редактировать
-                if (item.CanEditReturnQuantity)
-                {
-                    item.ReturnQuantity = item.Quantity;
-                }
-                else
-                {
-                    // Убедимся, что ReturnQuantity = Quantity для нередактируемых
-                    item.ReturnQuantity = item.Quantity;
-                }
+        // --- Логика выбора и изменения количества ---
 
+        // Нажатие Enter на элементе списка
+        private void OriginalCheckListView_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && OriginalCheckListView.SelectedItem is ReturnItemView selectedItem)
+            {
+                // Имитируем клик по колонке с количеством или просто вызываем метод редактирования
+                EditReturnQuantity(selectedItem);
+                e.Handled = true;
             }
-            // Активируем кнопку, если есть хоть что-то к возврату (всегда будет, если чек не пустой)
-            ProcessReturnButton.IsEnabled = _originalCheckItemsView.Any(i => i.ReturnQuantity > 0);
-            ShowError($"Выбраны все позиции для возврата. Проверьте количество и нажмите 'Оформить возврат'.", isInfo: true);
-            OriginalCheckListView.SelectAll(); // Выделяем все для наглядности
         }
 
-        // Кнопка "Вернуть выбранное" - теперь просто активирует кнопку оформления
-        private void ReturnSelectedButton_Click(object sender, RoutedEventArgs e)
+        // Вызов диалога для редактирования количества возврата
+        private void EditReturnQuantity(ReturnItemView item)
         {
-            if (_originalCheck == null || OriginalCheckListView.SelectedItems.Count == 0)
+            if (item == null || !item.CanEditReturnQuantity) // Проверяем, можно ли редактировать
             {
-                ShowError("Сначала выберите одну или несколько позиций в списке.");
-                // Не меняем состояние ProcessReturnButton здесь, т.к. оно зависит от введенного кол-ва
+                ShowError("Количество для этой позиции нельзя изменить.");
                 return;
             }
 
-            // Проходим по всем ВЫДЕЛЕННЫМ элементам
-            foreach (ReturnItemView selectedItem in OriginalCheckListView.SelectedItems)
-            {
-                // Устанавливаем ReturnQuantity равным исходному Quantity,
-                // если это не маркированный товар (т.к. для маркированных мы и так возвращаем все)
-                // или если пользователь может редактировать количество
-                if (selectedItem.CanEditReturnQuantity) // Проверяем, можно ли менять кол-во
-                {
-                    selectedItem.ReturnQuantity = selectedItem.Quantity;
-                }
-                else
-                {
-                    // Если редактировать нельзя (маркированный), убедимся, что стоит полное кол-во
-                    selectedItem.ReturnQuantity = selectedItem.Quantity;
-                }
-            }
+            var quantityDialog = new InputDialog("Возврат кол-ва",
+                                                $"Введите количество для возврата (макс: {item.Quantity}):\n{item.ProductName}",
+                                                item.ReturnQuantity.ToString()); // Показываем текущее значение к возврату
+            quantityDialog.Owner = this;
 
-            // После изменения количеств, проверяем, есть ли что возвращать и активируем кнопку
-            ProcessReturnButton.IsEnabled = _originalCheckItemsView.Any(i => i.ReturnQuantity > 0);
-            ShowError($"Для выбранных позиций установлено максимальное количество к возврату. Проверьте и нажмите 'Оформить возврат'.", isInfo: true);
+            if (quantityDialog.ShowDialog() == true && decimal.TryParse(quantityDialog.InputText, out decimal newQuantity))
+            {
+                // Валидация в сеттере ReturnQuantity обработает некорректные значения (<=0 или > Quantity)
+                item.ReturnQuantity = newQuantity;
+                UpdateReturnTotals(); // Обновляем итоги после изменения
+            }
+            else if (quantityDialog.DialogResult == true)
+            {
+                ShowError("Некорректное количество.");
+            }
         }
 
 
@@ -296,10 +290,89 @@ namespace NexusPoint.Windows
 
             // После валидации сразу активируем кнопку "Оформить возврат", если есть хотя бы одно значение > 0
             // (Можно сделать и по событию TextChanged, но это проще)
-            Dispatcher.BeginInvoke(new Action(() => { // Отложенный вызов после обновления текста
-                ProcessReturnButton.IsEnabled = _originalCheckItemsView.Any(i => i.ReturnQuantity > 0);
+            Dispatcher.BeginInvoke(new Action(() => {
+                UpdateReturnTotals();
             }), DispatcherPriority.ContextIdle);
 
+        }
+
+
+        // Кнопка "Вернуть весь чек"
+        private void ReturnAllButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_originalCheck == null) return;
+            foreach (var item in _originalCheckItemsView)
+            {
+                // Устанавливаем полное количество
+                item.ReturnQuantity = item.Quantity;
+            }
+            UpdateReturnTotals(); // Обновляем итоги
+            ShowError($"Выбраны все позиции для возврата. Проверьте количество и нажмите 'Оформить возврат'.", isInfo: true);
+            OriginalCheckListView.SelectAll();
+        }
+
+        // Кнопка "Вернуть выбранное" - теперь просто активирует кнопку оформления
+        private void ReturnSelectedButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_originalCheck == null || OriginalCheckListView.SelectedItems.Count == 0)
+            {
+                ShowError("Сначала выберите одну или несколько позиций в списке.");
+                return;
+            }
+
+            // Сначала сбрасываем все на 0
+            foreach (var item in _originalCheckItemsView)
+            {
+                item.ReturnQuantity = 0;
+            }
+            // Затем устанавливаем полное количество для выбранных
+            foreach (ReturnItemView selectedItem in OriginalCheckListView.SelectedItems)
+            {
+                selectedItem.ReturnQuantity = selectedItem.Quantity;
+            }
+
+            UpdateReturnTotals(); // Обновляем итоги
+            ShowError($"Для выбранных позиций установлено количество к возврату. Проверьте и нажмите 'Оформить возврат'.", isInfo: true);
+        }
+
+        // --- Расчет и отображение итогов возврата ---
+        private void UpdateReturnTotals()
+        {
+            if (_originalCheck == null || !_originalCheckItemsView.Any())
+            {
+                ReturnTotalsPanel.Visibility = Visibility.Hidden;
+                ProcessReturnButton.IsEnabled = false;
+                return;
+            }
+
+            decimal totalReturnAmount = _originalCheckItemsView.Sum(item => item.ReturnItemTotalAmount);
+
+            if (totalReturnAmount > 0)
+            {
+                ReturnTotalAmountText.Text = totalReturnAmount.ToString("C");
+
+                // Определяем способ возврата (как раньше)
+                string returnMethodDisplay = "Наличными";
+                if (_originalCheck.PaymentType?.ToLower() == "card" || _originalCheck.PaymentType?.ToLower() == "mixed")
+                {
+                    // Упрощенно - всегда на карту, если карта была
+                    // Добавить более сложную логику при необходимости
+                    if (_originalCheck.CardPaid >= totalReturnAmount || _originalCheck.PaymentType?.ToLower() == "card") // Если оплаты картой хватает или вся оплата картой
+                        returnMethodDisplay = "На карту";
+                    else
+                        returnMethodDisplay = "Карта + Наличные"; // Если смешанный и возврат больше оплаты картой
+                }
+                ReturnMethodText.Text = returnMethodDisplay;
+
+                ReturnTotalsPanel.Visibility = Visibility.Visible;
+                ProcessReturnButton.IsEnabled = true; // Активируем кнопку оформления
+            }
+            else // Если сумма возврата 0
+            {
+                ReturnTotalsPanel.Visibility = Visibility.Hidden;
+                ProcessReturnButton.IsEnabled = false; // Деактивируем кнопку
+            }
+            ClearError(); // Сбрасываем ошибки при пересчете
         }
 
 
@@ -315,39 +388,88 @@ namespace NexusPoint.Windows
             // 2. --- Сбор позиций для возврата ---
             var itemsToReturnProcessing = _originalCheckItemsView
                 .Where(item => item.ReturnQuantity > 0) // Берем те, где указано кол-во > 0
-                .ToList();
+                .ToList(); // Уже содержит ReturnItemView
 
             if (!itemsToReturnProcessing.Any())
             { ShowError("Не указано количество для возврата ни по одной позиции."); return; }
 
             // 3. --- Проверка количества и марок ---
-            List<CheckItem> returnCheckItems = new List<CheckItem>(); // Список для нового чека
+            List<CheckItem> returnCheckItems = new List<CheckItem>();
             foreach (var itemToReturnView in itemsToReturnProcessing)
             {
-                // Валидация введенного количества
-                if (itemToReturnView.ReturnQuantity > itemToReturnView.Quantity)
-                { ShowError($"Нельзя вернуть {itemToReturnView.ReturnQuantity} шт. товара '{itemToReturnView.ProductName}', продано было {itemToReturnView.Quantity}."); return; }
-                if (itemToReturnView.ReturnQuantity <= 0) continue; // Пропускаем нулевые (хотя where выше должен был отсеять)
+                // Валидация количества уже была в сеттере ReturnQuantity и здесь не нужна
 
-                // Создаем позицию для чека возврата
+                // Создаем позицию для чека возврата, используя ReturnQuantity
                 decimal quantityRatio = itemToReturnView.Quantity > 0 ? itemToReturnView.ReturnQuantity / itemToReturnView.Quantity : 0;
                 returnCheckItems.Add(new CheckItem
                 {
                     ProductId = itemToReturnView.ProductId,
-                    Quantity = itemToReturnView.ReturnQuantity,
+                    Quantity = itemToReturnView.ReturnQuantity, // <<--- ИСПОЛЬЗУЕМ ИЗМЕНЕННОЕ КОЛ-ВО
                     PriceAtSale = itemToReturnView.PriceAtSale,
+                    // Рассчитываем скидку и сумму пропорционально возвращаемому кол-ву
                     DiscountAmount = Math.Round(itemToReturnView.DiscountAmount * quantityRatio, 2),
-                    ItemTotalAmount = Math.Round(itemToReturnView.OriginalItemTotalAmount * quantityRatio, 2)
+                    ItemTotalAmount = Math.Round(itemToReturnView.OriginalItemTotalAmount * quantityRatio, 2) // Используем рассчитанное свойство из ReturnItemView? Нет, лучше пересчитать
+                    // Пересчет ItemTotalAmount:
+                    // ItemTotalAmount = Math.Round((itemToReturnView.PriceAtSale - (itemToReturnView.DiscountAmount / itemToReturnView.Quantity)) * itemToReturnView.ReturnQuantity, 2)
+                    // Или просто взять сумму из ReturnItemTotalAmount:
+                    // ItemTotalAmount = itemToReturnView.ReturnItemTotalAmount
                 });
+                // Давайте для точности пересчитаем ItemTotalAmount здесь
+                var currentReturnItem = returnCheckItems.Last();
+                currentReturnItem.ItemTotalAmount = Math.Round(currentReturnItem.Quantity * currentReturnItem.PriceAtSale - currentReturnItem.DiscountAmount, 2);
+
             }
 
-            // 4. --- Формирование чека возврата ---
-            if (!returnCheckItems.Any())
-            { ShowError("Нет корректных позиций для оформления возврата."); return; }
-
-            decimal returnTotalAmount = returnCheckItems.Sum(i => i.ItemTotalAmount);
+            // 4. --- Определение СПОСОБА ВОЗВРАТА и Формирование чека ---
+            decimal returnTotalAmount = returnCheckItems.Sum(i => i.ItemTotalAmount); // Пересчитываем сумму по новым позициям
             decimal returnDiscountAmount = returnCheckItems.Sum(i => i.DiscountAmount);
-            bool returnByCard = ReturnCardRadio.IsChecked == true; // Определяем способ возврата
+
+            bool returnByCard = false;
+            bool returnByCash = false;
+            decimal amountToReturnOnCard = 0m;
+            decimal amountToReturnInCash = 0m;
+            string returnPaymentTypeForCheck = "Cash"; // Тип для записи в чек
+
+            string originalPaymentTypeLower = _originalCheck.PaymentType?.ToLower();
+
+            if (originalPaymentTypeLower == "cash")
+            {
+                returnByCash = true; amountToReturnInCash = returnTotalAmount; returnPaymentTypeForCheck = "Cash";
+            }
+            else if (originalPaymentTypeLower == "card")
+            {
+                returnByCard = true; amountToReturnOnCard = returnTotalAmount; returnPaymentTypeForCheck = "Card";
+            }
+            else if (originalPaymentTypeLower == "mixed")
+            {
+                decimal originalCardPaid = _originalCheck.CardPaid;
+                if (returnTotalAmount <= originalCardPaid)
+                {
+                    returnByCard = true; amountToReturnOnCard = returnTotalAmount; returnPaymentTypeForCheck = "Card";
+                }
+                else
+                {
+                    returnByCard = true; returnByCash = true;
+                    amountToReturnOnCard = originalCardPaid;
+                    amountToReturnInCash = returnTotalAmount - originalCardPaid;
+                    returnPaymentTypeForCheck = "Mixed";
+                }
+            }
+            else
+            {
+                ShowError("Не удалось определить способ оплаты оригинала. Возврат будет наличными.");
+                returnByCash = true; amountToReturnInCash = returnTotalAmount; returnPaymentTypeForCheck = "Cash";
+            }
+
+            if (amountToReturnInCash < 0 || amountToReturnOnCard < 0) // Доп проверка
+            {
+                ShowError("Ошибка расчета суммы возврата."); return;
+            }
+            if (!returnByCard && !returnByCash) // Если оба false - тоже ошибка
+            {
+                ShowError("Не удалось определить метод возврата."); return;
+            }
+
 
             var returnCheck = new Check
             {
@@ -355,10 +477,14 @@ namespace NexusPoint.Windows
                 CheckNumber = _checkRepository.GetNextCheckNumber(CurrentShift.ShiftId),
                 Timestamp = DateTime.Now,
                 UserId = CurrentUser.UserId,
-                TotalAmount = returnTotalAmount,
-                PaymentType = returnByCard ? "CardReturn" : "Cash", // Можно использовать для отчетности
-                CashPaid = 0,
-                CardPaid = 0, // При возврате не получаем деньги
+                TotalAmount = returnTotalAmount, // Общая сумма возврата
+                PaymentType = returnPaymentTypeForCheck, // Тип чека возврата (Cash/Card/Mixed)
+                CashPaid = 0, // При возврате деньги не получаем
+                CardPaid = 0, // При возврате деньги не получаем
+                              // Важно: Можно использовать CashPaid/CardPaid для записи СУММЫ ВОЗВРАТА каждым способом
+                              // Например: CashPaid = amountToReturnInCash, CardPaid = amountToReturnOnCard
+                              // Но это может запутать отчетность. Лучше ориентироваться на PaymentType чека возврата.
+                              // Оставляем их 0.
                 DiscountAmount = returnDiscountAmount,
                 IsReturn = true,
                 OriginalCheckId = _originalCheck.CheckId,
@@ -368,6 +494,25 @@ namespace NexusPoint.Windows
             // 5. --- Сохранение и Печать ---
             try
             {
+                // --- Взаимодействие с оборудованием ---
+                if (returnByCard && amountToReturnOnCard > 0)
+                {
+                    MessageBoxResult pinpadResult = MessageBox.Show(
+                        $"Банковский терминал:\nПриложите/вставьте карту для ВОЗВРАТА\nСумма: {returnCheck.TotalAmount:C}\n\nОперация прошла успешно?",
+                        "Возврат на карту", MessageBoxButton.YesNo, MessageBoxImage.Warning); // Warning, т.к. отмена возможна
+
+                    if (pinpadResult == MessageBoxResult.No)
+                    {
+                        ShowError("Возврат на карту отклонен/отменен.");
+                        return; // Прерываем операцию
+                    }
+                    // Если Yes - продолжаем сохранять чек
+                }
+                else
+                {
+
+                }
+
                 ProcessReturnButton.IsEnabled = false; // Блокируем кнопку
                 FindCheckButton.IsEnabled = false; // Блокируем поиск на время сохранения
                 StatusText.Text = "Сохранение чека возврата...";
@@ -393,48 +538,42 @@ namespace NexusPoint.Windows
                 }
                 checkSb.AppendLine("---------------------------------");
                 checkSb.AppendLine($"ИТОГО К ВОЗВРАТУ: {savedReturnCheck.TotalAmount:C}");
-                checkSb.AppendLine(returnByCard ? "ВОЗВРАТ НА КАРТУ" : "ВОЗВРАТ НАЛИЧНЫМИ");
+                if (returnByCard && returnByCash) checkSb.AppendLine("ВОЗВРАТ: КАРТА + НАЛИЧНЫЕ");
+                else if (returnByCard) checkSb.AppendLine("ВОЗВРАТ НА КАРТУ");
+                else checkSb.AppendLine("ВОЗВРАТ НАЛИЧНЫМИ");
                 checkSb.AppendLine("--- Конец чека возврата ---");
                 PrinterService.Print($"Чек возврата №{savedReturnCheck.CheckNumber}", checkSb.ToString());
 
-                // --- Печать "рыбы" РКО ---
-                StringBuilder rkoSb = new StringBuilder();
-                rkoSb.AppendLine($"          Расходный Кассовый Ордер № {savedReturnCheck.CheckNumber}-В");
-                rkoSb.AppendLine($"                          от {savedReturnCheck.Timestamp:d} г.");
-                rkoSb.AppendLine("-------------------------------------------------------------");
-                rkoSb.AppendLine($"Организация:    ООО \"NexusPoint\"");
-                rkoSb.AppendLine("-------------------------------------------------------------");
-                rkoSb.AppendLine($"Выдать:         _____________________________________________");
-                rkoSb.AppendLine($"                              (Ф.И.О.)");
-                rkoSb.AppendLine($"Основание:      Возврат товара по чеку №{_originalCheck.CheckNumber} от {_originalCheck.Timestamp:d}");
-                rkoSb.AppendLine($"Сумма:          {savedReturnCheck.TotalAmount:N2} руб.");
-                rkoSb.AppendLine($"                ({Utils.Converters.AmountToWordsConverter.Convert(savedReturnCheck.TotalAmount)})"); // СУММА ПРОПИСЬЮ 
-                rkoSb.AppendLine($"Приложение:     Чек №{savedReturnCheck.CheckNumber}");
-                rkoSb.AppendLine("\n");
-                rkoSb.AppendLine("Получил:        ____________________  _____________________");
-                rkoSb.AppendLine("                      (сумма прописью)");
-                rkoSb.AppendLine($"                {savedReturnCheck.Timestamp:d} г.             _____________________");
-                rkoSb.AppendLine($"                                        (подпись)");
-                rkoSb.AppendLine("\nПредъявлен документ: Паспорт серия _______ № _______________");
-                rkoSb.AppendLine($"Выдан:          _____________________________________________");
-                rkoSb.AppendLine($"                          (кем и когда)");
-                rkoSb.AppendLine("\n");
-                rkoSb.AppendLine("Главный бухгалтер _________ /_______________/");
-                rkoSb.AppendLine($"Кассир            _________ / {CurrentUser.FullName} /");
-
-                PrinterService.Print($"РКО №{savedReturnCheck.CheckNumber}-В", rkoSb.ToString());
-
-                // --- Взаимодействие с оборудованием ---
-                if (returnByCard)
+                if (returnByCash && amountToReturnInCash > 0)
                 {
-                    MessageBox.Show($"Имитация банковского терминала:\nПриложите/вставьте карту для возврата\nСумма: {savedReturnCheck.TotalAmount:C}",
-                                    "Возврат на карту", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    PrinterService.OpenCashDrawer(); // Открываем ящик для возврата наличных
-                }
+                    // --- Печать "рыбы" РКО ---
+                    StringBuilder rkoSb = new StringBuilder();
+                    rkoSb.AppendLine($"          Расходный Кассовый Ордер № {savedReturnCheck.CheckNumber}-В");
+                    rkoSb.AppendLine($"                          от {savedReturnCheck.Timestamp:d} г.");
+                    rkoSb.AppendLine("-------------------------------------------------------------");
+                    rkoSb.AppendLine($"Организация:    ООО \"NexusPoint\"");
+                    rkoSb.AppendLine("-------------------------------------------------------------");
+                    rkoSb.AppendLine($"Выдать:         _____________________________________________");
+                    rkoSb.AppendLine($"                              (Ф.И.О.)");
+                    rkoSb.AppendLine($"Основание:      Возврат товара по чеку №{_originalCheck.CheckNumber} от {_originalCheck.Timestamp:d}");
+                    rkoSb.AppendLine($"Сумма:          {amountToReturnInCash:N2} руб.");
+                    rkoSb.AppendLine($"                ({Utils.Converters.AmountToWordsConverter.Convert(amountToReturnInCash)})"); // Сумма прописью
+                    rkoSb.AppendLine($"Приложение:     Чек №{savedReturnCheck.CheckNumber}");
+                    rkoSb.AppendLine("\n");
+                    rkoSb.AppendLine("Получил:        ____________________  _____________________");
+                    rkoSb.AppendLine("                      (сумма прописью)");
+                    rkoSb.AppendLine($"                {savedReturnCheck.Timestamp:d} г.             _____________________");
+                    rkoSb.AppendLine($"                                        (подпись)");
+                    rkoSb.AppendLine("\nПредъявлен документ: Паспорт серия _______ № _______________");
+                    rkoSb.AppendLine($"Выдан:          _____________________________________________");
+                    rkoSb.AppendLine($"                          (кем и когда)");
+                    rkoSb.AppendLine("\n");
+                    rkoSb.AppendLine("Главный бухгалтер _________ /_______________/");
+                    rkoSb.AppendLine($"Кассир            _________ / {CurrentUser.FullName} /");
 
+                    PrinterService.Print($"РКО №{savedReturnCheck.CheckNumber}-В", rkoSb.ToString());
+                    PrinterService.OpenCashDrawer(); // Открываем ящик
+                }
                 this.DialogResult = true; // Успешно, закрываем окно
             }
             catch (InvalidOperationException invEx)
