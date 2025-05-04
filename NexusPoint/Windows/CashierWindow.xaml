@@ -61,9 +61,15 @@
                         <GridViewColumn Header="Наименование" DisplayMemberBinding="{Binding ProductName}" Width="300"/>
                         <!-- Потребуется доп. модель -->
                         <GridViewColumn Header="Кол-во" DisplayMemberBinding="{Binding Quantity}" Width="70"/>
-                        <GridViewColumn Header="Цена" DisplayMemberBinding="{Binding PriceAtSale, StringFormat=C}" Width="90"/>
-                        <GridViewColumn Header="Скидка" DisplayMemberBinding="{Binding DiscountAmount, StringFormat=C}" Width="80"/>
-                        <GridViewColumn Header="Сумма" DisplayMemberBinding="{Binding ItemTotalAmount, StringFormat=C}" Width="100"/>
+                        <GridViewColumn Header="Цена"
+                                        DisplayMemberBinding="{Binding PriceAtSale, StringFormat={}{0:C2}, ConverterCulture=ru-RU}"
+                                        Width="90"/>
+                        <GridViewColumn Header="Скидка"
+                                        DisplayMemberBinding="{Binding DiscountAmount, StringFormat={}{0:C2}, ConverterCulture=ru-RU}"
+                                        Width="80"/>
+                        <GridViewColumn Header="Сумма"
+                                        DisplayMemberBinding="{Binding CalculatedItemTotalAmount, StringFormat={}{0:C2}, ConverterCulture=ru-RU}"
+                                        Width="100"/>
                         <GridViewColumn Header="Марк." Width="50">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>

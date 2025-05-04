@@ -25,7 +25,7 @@ namespace NexusPoint.Utils
             // 2. Показ содержимого в MessageBox для наглядности
             // В реальном приложении здесь будет вызов драйвера принтера
             // или формирование ESC/POS команд.
-            MessageBox.Show(content, $"Имитация печати: {title}", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(content, title, MessageBoxButton.OK, MessageBoxImage.Information);
 
             // 3. Опционально: Запись в файл лога (раскомментировать при необходимости)
             /*

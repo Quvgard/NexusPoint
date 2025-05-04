@@ -18,16 +18,82 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using System.ComponentModel; 
+using System.Runtime.CompilerServices; 
 
 namespace NexusPoint.Windows
 {
     // Модель для отображения в ListView (добавляем Product)
-    public class CheckItemView : CheckItem
+    public class CheckItemView : CheckItem, INotifyPropertyChanged
     {
-        public Product Product { get; set; }
+        private Product _product;
+        public Product Product
+        {
+            get => _product;
+            set { _product = value; OnPropertyChanged(); OnPropertyChanged(nameof(ProductName)); } // Уведомляем об изменении Product и ProductName
+        }
+
+        // --- Переопределяем свойства из CheckItem, чтобы вызывать OnPropertyChanged ---
+        private decimal _quantity;
+        public new decimal Quantity // Используем new для переопределения свойства базового класса
+        {
+            get => _quantity;
+            set { _quantity = value; OnPropertyChanged(); OnPropertyChanged(nameof(CalculatedItemTotalAmount)); }  // Уведомляем об изменении Quantity и ItemTotalAmount
+        }
+
+        private decimal _priceAtSale;
+        public new decimal PriceAtSale
+        {
+            get => _priceAtSale;
+            set { _priceAtSale = value; OnPropertyChanged(); OnPropertyChanged(nameof(CalculatedItemTotalAmount)); }
+        }
+
+        private decimal _discountAmount;
+        public new decimal DiscountAmount
+        {
+            get => _discountAmount;
+            set { _discountAmount = value; OnPropertyChanged(); OnPropertyChanged(nameof(CalculatedItemTotalAmount)); }
+        }
+
+        private string _markingCode;
+        public new string MarkingCode
+        {
+            get => _markingCode;
+            set { _markingCode = value; OnPropertyChanged(); }
+        }
+        // --- Конец переопределения свойств ---
+
+        // Свойства только для отображения (зависят от других)
         public string ProductName => Product?.Name ?? "<Товар не найден>";
-        // Переопределяем, чтобы использовать свойство Product
-        public new decimal ItemTotalAmount => Quantity * PriceAtSale - DiscountAmount;
+        // Это свойство теперь действительно ТОЛЬКО для чтения в UI,
+        // оно будет обновляться автоматически при изменении Quantity, PriceAtSale, DiscountAmount
+        public decimal CalculatedItemTotalAmount => Quantity * PriceAtSale - DiscountAmount;
+
+        // --- Реализация INotifyPropertyChanged ---
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        // --- Конструктор для копирования из CheckItem ---
+        public CheckItemView(CheckItem baseItem, Product product)
+        {
+            // Копируем значения из базового CheckItem
+            this.CheckItemId = baseItem.CheckItemId;
+            this.CheckId = baseItem.CheckId;
+            this.ProductId = baseItem.ProductId;
+            // Важно: присваиваем значения приватным полям, чтобы не вызвать PropertyChanged рекурсивно
+            this._quantity = baseItem.Quantity;
+            this._priceAtSale = baseItem.PriceAtSale;
+            this._discountAmount = baseItem.DiscountAmount;
+            this._markingCode = baseItem.MarkingCode;
+
+            // Устанавливаем продукт
+            this.Product = product; // Это вызовет OnPropertyChanged для Product и ProductName
+        }
+        // Добавим пустой конструктор (может быть нужен для некоторых операций WPF)
+        public CheckItemView() { }
     }
 
 
@@ -261,29 +327,24 @@ namespace NexusPoint.Windows
                 if (existingItem != null && !product.IsMarked) // Увеличиваем кол-во только для немаркированных
                 {
                     existingItem.Quantity += 1;
-                    // Обновляем общую сумму позиции
-                    // existingItem.ItemTotalAmount = existingItem.Quantity * existingItem.PriceAtSale - existingItem.DiscountAmount;
-                    // ListView обновится сам благодаря ObservableCollection, но нужно пересчитать итоги
-                    var index = CurrentCheckItems.IndexOf(existingItem);
-                    CurrentCheckItems[index] = existingItem; // "Переустановить" элемент для обновления UI, если модель не INotifyPropertyChanged
                 }
                 else // Добавляем новую позицию
                 {
-                    var newItem = new CheckItemView
-                    {
-                        ProductId = product.ProductId,
-                        Product = product, // Сохраняем весь объект Product для доступа к имени
-                        Quantity = 1,
-                        PriceAtSale = product.Price,
-                        // ItemTotalAmount вычисляется в модели
-                        DiscountAmount = 0, // Скидки пока не применяем
-                        MarkingCode = markingCode
-                        // CheckId будет присвоен при сохранении чека
-                    };
+                    var newItem = new CheckItemView(
+                        new CheckItem // Создаем "пустой" CheckItem с базовыми данными
+                        {
+                            ProductId = product.ProductId,
+                            Quantity = 1,
+                            PriceAtSale = product.Price,
+                            DiscountAmount = 0,
+                            MarkingCode = markingCode
+                        },
+                        product // Передаем найденный продукт
+                    );
                     CurrentCheckItems.Add(newItem);
                     // Прокрутить список к добавленному элементу
                     CheckListView.ScrollIntoView(newItem);
-                    CheckListView.SelectedItem = newItem; // Выделить добавленный
+                    CheckListView.SelectedItem = newItem; // Выделить добавленнй
                 }
 
 
@@ -478,12 +539,8 @@ namespace NexusPoint.Windows
                     // decimal stockNeeded = newQuantity - selectedItem.Quantity;
                     // ... проверка остатка ...
 
-                    selectedItem.Quantity = newQuantity;
-                    // Обновляем UI (если не ObservableCollection или модель не INPC)
-                    var index = CurrentCheckItems.IndexOf(selectedItem);
-                    if (index >= 0) CurrentCheckItems[index] = selectedItem; // Hack для обновления UI
-
-                    UpdateTotals();
+                    selectedItem.Quantity = newQuantity; // Просто меняем свойство
+                    UpdateTotals(); // Пересчитать общие итоги нужно
                     ItemInputTextBox.Focus();
                 }
                 else if (quantityDialog.DialogResult == true) // Если ввели не число или <= 0

@@ -51,7 +51,10 @@ namespace NexusPoint.Windows
         // Обработка смены типа оплаты
         private void PaymentType_Changed(object sender, RoutedEventArgs e)
         {
-            if (CashRadioButton == null) return; // Предотвратить выполнение до полной загрузки окна
+            if (CashInputPanel == null || ChangePanel == null || CardPaymentPanel == null || OkButton == null || CashRadioButton == null)
+            {
+                return;
+            }
 
             if (CashRadioButton.IsChecked == true)
             {
@@ -59,7 +62,8 @@ namespace NexusPoint.Windows
                 CashInputPanel.Visibility = Visibility.Visible;
                 ChangePanel.Visibility = Visibility.Visible;
                 CardPaymentPanel.Visibility = Visibility.Collapsed;
-                CashReceivedTextBox.Focus();
+
+                if (this.IsLoaded) CashReceivedTextBox.Focus();
             }
             else if (CardRadioButton.IsChecked == true)
             {
@@ -67,7 +71,7 @@ namespace NexusPoint.Windows
                 CashInputPanel.Visibility = Visibility.Collapsed; // Скрываем ввод наличных
                 ChangePanel.Visibility = Visibility.Collapsed;
                 CardPaymentPanel.Visibility = Visibility.Collapsed;
-                OkButton.Focus(); // Фокус сразу на кнопку Оплатить
+                if (this.IsLoaded) OkButton.Focus();
             }
             else if (MixedRadioButton.IsChecked == true)
             {
@@ -75,10 +79,13 @@ namespace NexusPoint.Windows
                 CashInputPanel.Visibility = Visibility.Visible;
                 ChangePanel.Visibility = Visibility.Collapsed;
                 CardPaymentPanel.Visibility = Visibility.Visible;
-                CashReceivedTextBox.Focus();
+                if (this.IsLoaded) CashReceivedTextBox.Focus();
             }
-            UpdatePaymentDetails(); // Пересчитать детали при смене типа
-            ClearError();
+            if (this.IsLoaded)
+            {
+                UpdatePaymentDetails();
+                ClearError();
+            }
         }
 
         // Валидация ввода в поле Наличные (только цифры и один разделитель)

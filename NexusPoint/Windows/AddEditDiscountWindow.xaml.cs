@@ -23,15 +23,15 @@ namespace NexusPoint.Windows
     /// </summary>
     public partial class AddEditDiscountWindow : Window
     {
+        // --- Поля класса ---
         private readonly DiscountRepository _discountRepository;
         private readonly ProductRepository _productRepository;
-        private readonly Discount _originalDiscount; // null для добавления
+        private readonly Discount _originalDiscount;
         private bool IsEditMode => _originalDiscount != null;
+        private Product _requiredProduct = null;
+        private Product _giftProduct = null;
 
-        private Product _requiredProduct = null; // Найденный товар-условие
-        private Product _giftProduct = null;     // Найденный товар-подарок
-
-        // Конструктор для добавления
+        // --- Конструкторы ---
         public AddEditDiscountWindow()
         {
             InitializeComponent();
@@ -39,34 +39,40 @@ namespace NexusPoint.Windows
             _productRepository = new ProductRepository();
             this.Title = "Добавление акции";
         }
-
-        // Конструктор для редактирования
         public AddEditDiscountWindow(Discount discountToEdit) : this()
         {
             _originalDiscount = discountToEdit;
             this.Title = "Редактирование акции";
-            LoadDiscountData(); // Загружаем данные в поля
+            // LoadDiscountData() будет вызван в Window_Loaded
         }
 
-        private void Window_Loaded(object sender, RoutedEventArgs e)
+        // --- Загрузка окна ---
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Устанавливаем тип скидки по умолчанию при добавлении
-            if (!IsEditMode)
+            if (IsEditMode)
             {
-                TypeComboBox.SelectedIndex = 0; // Percentage
+                await LoadDiscountData(); // Загружаем асинхронно
             }
-            UpdateUIBasedOnType(); // Обновляем видимость/активность полей
+            else
+            {
+                TypeComboBox.SelectedIndex = 0; // Percentage по умолчанию
+                IsActiveCheckBox.IsChecked = true;
+                UpdateUIVisibility(); // Обновляем видимость сразу
+            }
             NameTextBox.Focus();
         }
 
-        // Загрузка данных скидки в поля (для режима редактирования)
-        private async void LoadDiscountData()
+        // --- Асинхронная загрузка данных для редактирования ---
+        private async System.Threading.Tasks.Task LoadDiscountData()
         {
             if (_originalDiscount == null) return;
 
             NameTextBox.Text = _originalDiscount.Name;
+            StartDatePicker.SelectedDate = _originalDiscount.StartDate;
+            EndDatePicker.SelectedDate = _originalDiscount.EndDate;
+            IsActiveCheckBox.IsChecked = _originalDiscount.IsActive;
 
-            // Выбираем тип
+            // Выбор типа
             foreach (ComboBoxItem item in TypeComboBox.Items)
             {
                 if (item.Content.ToString() == _originalDiscount.Type)
@@ -75,148 +81,221 @@ namespace NexusPoint.Windows
                     break;
                 }
             }
+            if (TypeComboBox.SelectedItem == null) TypeComboBox.SelectedIndex = 0; // Fallback
 
-            ValueTextBox.Text = _originalDiscount.Value?.ToString(CultureInfo.CurrentCulture) ?? "";
+            // Загрузка ID/Значений в поля
+            ValueTextBox.Text = _originalDiscount.Value?.ToString(CultureInfo.CurrentCulture);
+            RequiredQuantityNTextBox.Text = _originalDiscount.RequiredQuantityN?.ToString();
+            GiftQuantityMTextBox.Text = _originalDiscount.GiftQuantityM?.ToString();
+            NthItemNumberTextBox.Text = _originalDiscount.NthItemNumber?.ToString();
+            CheckAmountThresholdTextBox.Text = _originalDiscount.CheckAmountThreshold?.ToString(CultureInfo.CurrentCulture);
 
-            // Загружаем товары (если ID указаны)
-            if (_originalDiscount.RequiredProductId.HasValue)
+            // Установка RadioButton для N-ного
+            if (_originalDiscount.IsNthDiscountPercentage) NthDiscountPercentageRadio.IsChecked = true;
+            else NthDiscountAmountRadio.IsChecked = true;
+            NthValueTextBox.Text = _originalDiscount.Value?.ToString(CultureInfo.CurrentCulture); // Value используется и здесь
+
+            // Установка RadioButton для скидки на чек
+            if (_originalDiscount.IsCheckDiscountPercentage) CheckDiscountPercentageRadio.IsChecked = true;
+            else CheckDiscountAmountRadio.IsChecked = true;
+            CheckValueTextBox.Text = _originalDiscount.Value?.ToString(CultureInfo.CurrentCulture); // Value используется и здесь
+
+            // Асинхронная загрузка связанных товаров
+            var requiredTask = LoadProductInfoAsync(_originalDiscount.RequiredProductId, RequiredProductTextBox, RequiredProductNameText, true);
+            var giftTask = LoadProductInfoAsync(_originalDiscount.GiftProductId, GiftProductTextBox, GiftProductNameText, false);
+            await System.Threading.Tasks.Task.WhenAll(requiredTask, giftTask);
+
+            UpdateUIVisibility(); // Обновляем видимость после загрузки
+        }
+
+        // Вспомогательный метод для асинхронной загрузки инфо о товаре
+        private async System.Threading.Tasks.Task LoadProductInfoAsync(int? productId, TextBox codeTextBox, TextBlock nameTextBlock, bool isRequired)
+        {
+            if (!productId.HasValue) return;
+            Product product = null;
+            try
             {
-                _requiredProduct = await System.Threading.Tasks.Task.Run(() => // Асинхронно в фоне
-                   _productRepository.FindProductById(_originalDiscount.RequiredProductId.Value));
-                RequiredProductTextBox.Text = _requiredProduct?.ProductCode ?? _originalDiscount.RequiredProductId.ToString(); // Показываем код или ID
-                RequiredProductNameText.Text = _requiredProduct?.Name ?? "<не найден>";
+                product = await System.Threading.Tasks.Task.Run(() => _productRepository.FindProductById(productId.Value));
             }
-            if (_originalDiscount.GiftProductId.HasValue)
+            catch { } // Игнорируем ошибки поиска при загрузке
+
+            if (product != null)
             {
-                _giftProduct = await System.Threading.Tasks.Task.Run(() =>
-                   _productRepository.FindProductById(_originalDiscount.GiftProductId.Value));
-                GiftProductTextBox.Text = _giftProduct?.ProductCode ?? _originalDiscount.GiftProductId.ToString();
-                GiftProductNameText.Text = _giftProduct?.Name ?? "<не найден>";
+                codeTextBox.Text = product.ProductCode ?? productId.Value.ToString(); // Показываем код, если есть
+                nameTextBlock.Text = product.Name;
+                if (isRequired) _requiredProduct = product;
+                else _giftProduct = product;
             }
-
-
-            StartDatePicker.SelectedDate = _originalDiscount.StartDate;
-            EndDatePicker.SelectedDate = _originalDiscount.EndDate;
-            IsActiveCheckBox.IsChecked = _originalDiscount.IsActive;
-
-            UpdateUIBasedOnType(); // Обновляем UI после загрузки
+            else
+            {
+                codeTextBox.Text = productId.Value.ToString(); // Показываем ID, если товар не найден
+                nameTextBlock.Text = "<Товар удален или не найден>";
+            }
         }
 
 
-        // Обновление UI в зависимости от типа скидки
+        // --- Управление видимостью панелей ---
         private void TypeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            UpdateUIBasedOnType();
+            UpdateUIVisibility();
         }
 
-        private void UpdateUIBasedOnType()
+        private void UpdateUIVisibility()
         {
-            if (ValueTextBox == null || GiftProductTextBox == null || FindGiftProductButton == null) return;
+            if (!IsLoaded) return; // Не выполнять до полной загрузки окна
 
             string selectedType = (TypeComboBox.SelectedItem as ComboBoxItem)?.Content.ToString();
+            string currencySymbol = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol; // Получаем символ валюты
 
-            // Поле Значение (Value) - теперь активно и для "Фикс. цена"
-            bool isValueEnabled = selectedType == "Процент" || selectedType == "Сумма" || selectedType == "Фикс. цена";
-            ValueTextBox.IsEnabled = isValueEnabled;
+            // Сначала все скрываем
+            ValuePanel.Visibility = Visibility.Collapsed;
+            RequiredProductPanel.Visibility = Visibility.Collapsed;
+            GiftPanel.Visibility = Visibility.Collapsed;
+            NxMPanel.Visibility = Visibility.Collapsed;
+            NthPanel.Visibility = Visibility.Collapsed;
+            CheckAmountPanel.Visibility = Visibility.Collapsed;
 
-            // Определяем суффикс для поля Значение
-            if (selectedType == "Процент")
-                ValueSuffixText.Text = "%";
-            else if (selectedType == "Сумма" || selectedType == "Фикс. цена")
-                ValueSuffixText.Text = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol; // Валюта
-            else
-                ValueSuffixText.Text = ""; // Для Подарка суффикса нет
-
-            if (!isValueEnabled) ValueTextBox.Clear();
-
-            // Поле Товар-подарок
-            bool isGiftEnabled = selectedType == "Подарок";
-            GiftProductTextBox.IsEnabled = isGiftEnabled;
-            FindGiftProductButton.IsEnabled = isGiftEnabled;
-            if (!isGiftEnabled)
+            // Показываем нужные панели и устанавливаем суффиксы
+            switch (selectedType)
             {
-                GiftProductTextBox.Clear();
-                GiftProductNameText.Text = "";
-                _giftProduct = null;
+                case "Процент":
+                    ValuePanel.Visibility = Visibility.Visible;
+                    RequiredProductPanel.Visibility = Visibility.Visible;
+                    ValueSuffixText.Text = "%"; // Устанавливаем суффикс
+                    break;
+                case "Сумма":
+                case "Фикс. цена":
+                    ValuePanel.Visibility = Visibility.Visible;
+                    RequiredProductPanel.Visibility = Visibility.Visible;
+                    ValueSuffixText.Text = currencySymbol; // Устанавливаем суффикс
+                    break;
+                case "Подарок":
+                    RequiredProductPanel.Visibility = Visibility.Visible; // Опционально
+                    GiftPanel.Visibility = Visibility.Visible;
+                    break;
+                case "N+M Подарок":
+                    RequiredProductPanel.Visibility = Visibility.Visible;
+                    GiftPanel.Visibility = Visibility.Visible;
+                    NxMPanel.Visibility = Visibility.Visible;
+                    break;
+                case "Скидка на N-ный":
+                    RequiredProductPanel.Visibility = Visibility.Visible;
+                    NthPanel.Visibility = Visibility.Visible;
+                    // Устанавливаем суффикс для N-ного в зависимости от RadioButton
+                    NthValueSuffixText.Text = NthDiscountPercentageRadio.IsChecked == true ? "%" : currencySymbol;
+                    break;
+                case "Скидка на сумму чека":
+                    CheckAmountPanel.Visibility = Visibility.Visible;
+                    // Устанавливаем суффикс для скидки на чек в зависимости от RadioButton
+                    CheckValueSuffixText.Text = CheckDiscountPercentageRadio.IsChecked == true ? "%" : currencySymbol;
+                    break;
             }
 
-            // Поле Товар-условие теперь не нужно для типа "Подарок", если подарок НЕ зависит от покупки другого товара
-            // Но если акция "Купи X - получи Y в подарок", то RequiredProduct нужен.
-            // Оставим его пока активным всегда, кроме типа Подарок? Или сделать зависимым от логики?
-            // Пока оставляем как есть - RequiredProduct можно указать для любого типа.
+            // Добавим обработчики для RadioButton, чтобы менять суффиксы динамически
+            SetupRadioButtonSuffixHandlers();
+        }
+
+        private bool _radioHandlersSetup = false;
+        private void SetupRadioButtonSuffixHandlers()
+        {
+            if (_radioHandlersSetup) return; // Выполняем только один раз
+
+            string currencySymbol = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
+
+            // --- Обработчик для типа скидки на N-ный товар ---
+            RoutedEventHandler nthHandler = (s, e) => {
+                if (NthValueSuffixText != null) // Проверка на null на всякий случай
+                {
+                    NthValueSuffixText.Text = NthDiscountPercentageRadio.IsChecked == true ? "%" : currencySymbol;
+                }
+            };
+            // Привязываем обработчик к обоим RadioButton в группе NthType
+            NthDiscountPercentageRadio.Checked += nthHandler;
+            NthDiscountAmountRadio.Checked += nthHandler;
+
+            // --- Обработчик для типа скидки на сумму чека ---
+            RoutedEventHandler checkHandler = (s, e) => {
+                if (CheckValueSuffixText != null)
+                {
+                    CheckValueSuffixText.Text = CheckDiscountPercentageRadio.IsChecked == true ? "%" : currencySymbol;
+                }
+            };
+            // Привязываем обработчик к обоим RadioButton в группе CheckType
+            CheckDiscountPercentageRadio.Checked += checkHandler;
+            CheckDiscountAmountRadio.Checked += checkHandler;
+
+            _radioHandlersSetup = true; // Помечаем, что настройка выполнена
         }
 
 
-        // Валидация ввода значения скидки
-        private void ValueTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        // --- Валидация ввода ---
+        private void NumericTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
-            // Такая же валидация, как для цены/количества
             TextBox textBox = sender as TextBox;
             string currentText = textBox.Text.Insert(textBox.CaretIndex, e.Text);
             string decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
+            // Разрешаем цифры и один разделитель
             string pattern = $@"^\d*({Regex.Escape(decimalSeparator)}?\d*)?$";
             Regex regex = new Regex(pattern);
-            if (!regex.IsMatch(currentText))
+            if (!regex.IsMatch(currentText)) e.Handled = true;
+        }
+
+        private void IntegerTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        {
+            // Разрешаем только цифры
+            Regex regex = new Regex("^[0-9]+$"); // Только положительные целые
+                                                 // Чтобы разрешить ввод в пустой текстбокс, проверяем весь предполагаемый текст
+            TextBox textBox = sender as TextBox;
+            string newText = textBox.Text.Insert(textBox.CaretIndex, e.Text);
+            if (!regex.IsMatch(newText) && newText != "") // Разрешаем пустую строку
             {
                 e.Handled = true;
             }
         }
 
-        // --- Поиск товаров (упрощенный вариант по коду/ШК) ---
-        private async void FindRequiredProductButton_Click(object sender, RoutedEventArgs e)
+
+        // --- Поиск товаров ---
+        private async void FindProductButton_Click(object sender, RoutedEventArgs e)
         {
-            string codeOrBarcode = RequiredProductTextBox.Text.Trim();
+            Button btn = sender as Button;
+            bool isRequiredSearch = btn.CommandParameter?.ToString() == "Required";
+            TextBox targetTextBox = isRequiredSearch ? RequiredProductTextBox : GiftProductTextBox;
+            TextBlock targetNameBlock = isRequiredSearch ? RequiredProductNameText : GiftProductNameText;
+
+            string codeOrBarcode = targetTextBox.Text.Trim();
             if (string.IsNullOrEmpty(codeOrBarcode)) return;
 
             ClearError();
-            RequiredProductNameText.Text = "Поиск...";
-            _requiredProduct = null; // Сбрасываем предыдущий
+            targetNameBlock.Text = "Поиск...";
+            Product foundProduct = null;
 
             try
             {
-                _requiredProduct = await System.Threading.Tasks.Task.Run(() =>
+                foundProduct = await System.Threading.Tasks.Task.Run(() =>
                     _productRepository.FindProductByCodeOrBarcode(codeOrBarcode));
 
-                if (_requiredProduct != null)
+                if (foundProduct != null)
                 {
-                    RequiredProductNameText.Text = _requiredProduct.Name;
-                    RequiredProductTextBox.Text = _requiredProduct.ProductCode; // Ставим код для единообразия
+                    targetNameBlock.Text = foundProduct.Name;
+                    targetTextBox.Text = foundProduct.ProductCode; // Обновляем на код
+                    if (isRequiredSearch) _requiredProduct = foundProduct;
+                    else _giftProduct = foundProduct;
                 }
                 else
                 {
-                    RequiredProductNameText.Text = "<не найден>";
-                    ShowError($"Товар (условие) с кодом/ШК '{codeOrBarcode}' не найден.");
+                    targetNameBlock.Text = "<не найден>";
+                    ShowError($"Товар с кодом/ШК '{codeOrBarcode}' не найден.");
+                    if (isRequiredSearch) _requiredProduct = null;
+                    else _giftProduct = null;
                 }
             }
-            catch (Exception ex) { RequiredProductNameText.Text = "<ошибка>"; ShowError($"Ошибка поиска: {ex.Message}"); }
-        }
-
-        private async void FindGiftProductButton_Click(object sender, RoutedEventArgs e)
-        {
-            string codeOrBarcode = GiftProductTextBox.Text.Trim();
-            if (string.IsNullOrEmpty(codeOrBarcode)) return;
-
-            ClearError();
-            GiftProductNameText.Text = "Поиск...";
-            _giftProduct = null;
-
-            try
+            catch (Exception ex)
             {
-                _giftProduct = await System.Threading.Tasks.Task.Run(() =>
-                    _productRepository.FindProductByCodeOrBarcode(codeOrBarcode));
-
-                if (_giftProduct != null)
-                {
-                    GiftProductNameText.Text = _giftProduct.Name;
-                    GiftProductTextBox.Text = _giftProduct.ProductCode;
-                }
-                else
-                {
-                    GiftProductNameText.Text = "<не найден>";
-                    ShowError($"Товар (подарок) с кодом/ШК '{codeOrBarcode}' не найден.");
-                }
+                targetNameBlock.Text = "<ошибка>";
+                ShowError($"Ошибка поиска: {ex.Message}");
+                if (isRequiredSearch) _requiredProduct = null;
+                else _giftProduct = null;
             }
-            catch (Exception ex) { GiftProductNameText.Text = "<ошибка>"; ShowError($"Ошибка поиска: {ex.Message}"); }
         }
 
 
@@ -224,105 +303,74 @@ namespace NexusPoint.Windows
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
             ClearError();
+            if (!ValidateInput()) return; // Выносим валидацию в отдельный метод
 
-            // 1. Собираем данные
-            string name = NameTextBox.Text.Trim();
-            string type = (TypeComboBox.SelectedItem as ComboBoxItem)?.Content.ToString();
-            string valueString = ValueTextBox.Text.Trim();
-            string requiredProductInput = RequiredProductTextBox.Text.Trim(); // Это может быть ID или Code
-            string giftProductInput = GiftProductTextBox.Text.Trim();
-            DateTime? startDate = StartDatePicker.SelectedDate;
-            DateTime? endDate = EndDatePicker.SelectedDate;
-            bool isActive = IsActiveCheckBox.IsChecked ?? false;
+            // Создаем или обновляем объект
+            Discount discountToSave = IsEditMode ? _originalDiscount : new Discount();
 
-            // 2. Валидация
-            if (string.IsNullOrWhiteSpace(name)) { ShowError("Введите название акции."); NameTextBox.Focus(); return; }
-            if (string.IsNullOrEmpty(type)) { ShowError("Выберите тип акции."); TypeComboBox.Focus(); return; }
+            discountToSave.Name = NameTextBox.Text.Trim();
+            discountToSave.Type = (TypeComboBox.SelectedItem as ComboBoxItem).Content.ToString();
+            discountToSave.StartDate = StartDatePicker.SelectedDate;
+            discountToSave.EndDate = EndDatePicker.SelectedDate;
+            discountToSave.IsActive = IsActiveCheckBox.IsChecked ?? false;
 
-            decimal? value = null;
-            // Проверяем значение, если тип требует его
-            if (type == "Процент" || type == "Сумма" || type == "Фикс. цена")
+            // Заполняем специфичные для типа поля
+            discountToSave.Value = null;
+            discountToSave.RequiredProductId = null;
+            discountToSave.GiftProductId = null;
+            discountToSave.RequiredQuantityN = null;
+            discountToSave.GiftQuantityM = null;
+            discountToSave.NthItemNumber = null;
+            discountToSave.IsNthDiscountPercentage = false;
+            discountToSave.CheckAmountThreshold = null;
+            discountToSave.IsCheckDiscountPercentage = false;
+
+            decimal parsedValue; // Для TryParse
+
+            switch (discountToSave.Type)
             {
-                if (!decimal.TryParse(valueString, NumberStyles.Any, CultureInfo.CurrentCulture, out decimal parsedValue) || parsedValue <= 0)
-                { ShowError($"Введите корректное положительное значение для типа '{type}'."); ValueTextBox.Focus(); return; }
-
-                if (type == "Процент" && parsedValue > 100)
-                { ShowError("Процент скидки не может быть больше 100."); ValueTextBox.Focus(); return; }
-
-                // Для Фикс. цены тоже округляем до копеек
-                value = Math.Round(parsedValue, 2);
+                case "Процент":
+                case "Сумма":
+                case "Фикс. цена":
+                    if (decimal.TryParse(ValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue))
+                        discountToSave.Value = Math.Round(parsedValue, 2);
+                    discountToSave.RequiredProductId = _requiredProduct?.ProductId; // Может быть null
+                    break;
+                case "Подарок":
+                    discountToSave.RequiredProductId = _requiredProduct?.ProductId; // Может быть null
+                    discountToSave.GiftProductId = _giftProduct?.ProductId; // Должен быть найден
+                    break;
+                case "N+M Подарок":
+                    discountToSave.RequiredProductId = _requiredProduct?.ProductId; // Обязателен
+                    discountToSave.GiftProductId = _giftProduct?.ProductId;         // Обязателен
+                    if (int.TryParse(RequiredQuantityNTextBox.Text, out int n)) discountToSave.RequiredQuantityN = n;
+                    if (int.TryParse(GiftQuantityMTextBox.Text, out int m)) discountToSave.GiftQuantityM = m;
+                    break;
+                case "Скидка на N-ный":
+                    discountToSave.RequiredProductId = _requiredProduct?.ProductId; // Обязателен
+                    if (int.TryParse(NthItemNumberTextBox.Text, out int nth)) discountToSave.NthItemNumber = nth;
+                    discountToSave.IsNthDiscountPercentage = NthDiscountPercentageRadio.IsChecked == true;
+                    if (decimal.TryParse(NthValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue))
+                        discountToSave.Value = Math.Round(parsedValue, 2);
+                    break;
+                case "Скидка на сумму чека":
+                    if (decimal.TryParse(CheckAmountThresholdTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue))
+                        discountToSave.CheckAmountThreshold = Math.Round(parsedValue, 2);
+                    discountToSave.IsCheckDiscountPercentage = CheckDiscountPercentageRadio.IsChecked == true;
+                    if (decimal.TryParse(CheckValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue))
+                        discountToSave.Value = Math.Round(parsedValue, 2);
+                    break;
             }
 
-            // Проверка подарка
-            int? giftProductId = null; // Объявляем заранее
-            if (type == "Подарок")
-            {
-                if (_giftProduct == null)
-                {
-                    if (string.IsNullOrWhiteSpace(giftProductInput)) { ShowError("Для акции типа 'Подарок' необходимо указать товар-подарок."); GiftProductTextBox.Focus(); return; }
-                    else { ShowError($"Товар-подарок '{giftProductInput}' не найден или не выбран. Нажмите 'Найти' для поиска."); GiftProductTextBox.Focus(); return; }
-                }
-                giftProductId = _giftProduct.ProductId; // Присваиваем ID найденного подарка
-            }
-
-            // Валидация товара-условия (остается как было)
-            int? requiredProductId = null;
-            if (!string.IsNullOrWhiteSpace(requiredProductInput))
-            {
-                if (_requiredProduct == null || (_requiredProduct.ProductCode != requiredProductInput && _requiredProduct.Barcode != requiredProductInput)) // Уточняем проверку
-                {
-                    ShowError($"Товар-условие '{requiredProductInput}' не найден или не выбран. Нажмите 'Найти' для поиска."); RequiredProductTextBox.Focus(); return;
-                }
-                requiredProductId = _requiredProduct.ProductId;
-            }
-
-            if (startDate.HasValue && endDate.HasValue && endDate.Value < startDate.Value)
-            { ShowError("Дата окончания не может быть раньше даты начала."); EndDatePicker.Focus(); return; }
-
-
-            // 3. Создание/обновление объекта Discount
-            Discount discountToSave;
-            if (IsEditMode)
-            {
-                discountToSave = _originalDiscount;
-            }
-            else
-            {
-                discountToSave = new Discount();
-            }
-
-            discountToSave.Name = name;
-            discountToSave.Type = type;
-            discountToSave.Value = value; // Может быть null для Gift
-            discountToSave.RequiredProductId = requiredProductId;
-            discountToSave.GiftProductId = giftProductId; // Может быть null для не-Gift
-            discountToSave.StartDate = startDate;
-            discountToSave.EndDate = endDate;
-            discountToSave.IsActive = isActive;
-
-
-            // 4. Сохранение в БД
+            // Сохранение в БД
             try
             {
                 bool success;
-                if (IsEditMode)
-                {
-                    success = _discountRepository.UpdateDiscount(discountToSave);
-                }
-                else
-                {
-                    int newId = _discountRepository.AddDiscount(discountToSave);
-                    success = newId > 0;
-                }
+                if (IsEditMode) success = _discountRepository.UpdateDiscount(discountToSave);
+                else success = _discountRepository.AddDiscount(discountToSave) > 0;
 
-                if (success)
-                {
-                    this.DialogResult = true; // Успех
-                }
-                else
-                {
-                    ShowError("Не удалось сохранить акцию.");
-                }
+                if (success) this.DialogResult = true;
+                else ShowError("Не удалось сохранить акцию.");
             }
             catch (Exception ex)
             {
@@ -331,16 +379,75 @@ namespace NexusPoint.Windows
             }
         }
 
+        // --- Метод валидации ---
+        private bool ValidateInput()
+        {
+            string name = NameTextBox.Text.Trim();
+            string type = (TypeComboBox.SelectedItem as ComboBoxItem)?.Content.ToString();
+            DateTime? startDate = StartDatePicker.SelectedDate;
+            DateTime? endDate = EndDatePicker.SelectedDate;
+
+            if (string.IsNullOrWhiteSpace(name)) { ShowError("Введите название акции."); NameTextBox.Focus(); return false; }
+            if (string.IsNullOrEmpty(type)) { ShowError("Выберите тип акции."); TypeComboBox.Focus(); return false; }
+            if (startDate.HasValue && endDate.HasValue && endDate.Value < startDate.Value) { ShowError("Дата окончания не может быть раньше даты начала."); EndDatePicker.Focus(); return false; }
+
+            decimal parsedValue; int parsedInt; // Для TryParse
+
+            switch (type)
+            {
+                case "Процент":
+                case "Сумма":
+                case "Фикс. цена":
+                    if (!decimal.TryParse(ValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue) || parsedValue <= 0)
+                    { ShowError($"Введите корректное положительное значение для типа '{type}'."); ValueTextBox.Focus(); return false; }
+                    if (type == "Процент" && parsedValue > 100)
+                    { ShowError("Процент скидки не может быть больше 100."); ValueTextBox.Focus(); return false; }
+                    // Проверка найден ли RequiredProduct, если его код введен
+                    if (!string.IsNullOrWhiteSpace(RequiredProductTextBox.Text) && _requiredProduct == null)
+                    { ShowError($"Товар-условие '{RequiredProductTextBox.Text}' не найден. Нажмите 'Найти'."); RequiredProductTextBox.Focus(); return false; }
+                    break;
+                case "Подарок":
+                    // Проверка найден ли RequiredProduct, если его код введен
+                    if (!string.IsNullOrWhiteSpace(RequiredProductTextBox.Text) && _requiredProduct == null)
+                    { ShowError($"Товар-условие '{RequiredProductTextBox.Text}' не найден. Нажмите 'Найти'."); RequiredProductTextBox.Focus(); return false; }
+                    // Проверка GiftProduct - он обязателен
+                    if (_giftProduct == null)
+                    { ShowError("Необходимо указать и найти товар-подарок."); GiftProductTextBox.Focus(); return false; }
+                    break;
+                case "N+M Подарок":
+                    // RequiredProduct и GiftProduct обязательны
+                    if (_requiredProduct == null) { ShowError("Необходимо указать и найти товар-условие (X)."); RequiredProductTextBox.Focus(); return false; }
+                    if (_giftProduct == null) { ShowError("Необходимо указать и найти товар-подарок (Y)."); GiftProductTextBox.Focus(); return false; }
+                    // N и M обязательны и должны быть > 0
+                    if (!int.TryParse(RequiredQuantityNTextBox.Text, out parsedInt) || parsedInt <= 0) { ShowError("Введите корректное целое положительное количество N (купить)."); RequiredQuantityNTextBox.Focus(); return false; }
+                    if (!int.TryParse(GiftQuantityMTextBox.Text, out parsedInt) || parsedInt <= 0) { ShowError("Введите корректное целое положительное количество M (подарок)."); GiftQuantityMTextBox.Focus(); return false; }
+                    break;
+                case "Скидка на N-ный":
+                    // RequiredProduct обязателен
+                    if (_requiredProduct == null) { ShowError("Необходимо указать и найти товар-условие."); RequiredProductTextBox.Focus(); return false; }
+                    // N обязателен и должен быть > 0
+                    if (!int.TryParse(NthItemNumberTextBox.Text, out parsedInt) || parsedInt <= 0) { ShowError("Введите корректный номер N-ного товара (N > 0)."); NthItemNumberTextBox.Focus(); return false; }
+                    // Значение скидки (Value) обязательно и > 0
+                    if (!decimal.TryParse(NthValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue) || parsedValue <= 0)
+                    { ShowError("Введите корректное положительное значение скидки (процент или сумма)."); NthValueTextBox.Focus(); return false; }
+                    if (NthDiscountPercentageRadio.IsChecked == true && parsedValue > 100) { ShowError("Процент скидки не может быть больше 100."); NthValueTextBox.Focus(); return false; }
+                    break;
+                case "Скидка на сумму чека":
+                    // Порог обязателен и > 0
+                    if (!decimal.TryParse(CheckAmountThresholdTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue) || parsedValue <= 0)
+                    { ShowError("Введите корректный положительный порог суммы чека."); CheckAmountThresholdTextBox.Focus(); return false; }
+                    // Значение скидки (Value) обязательно и > 0
+                    if (!decimal.TryParse(CheckValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue) || parsedValue <= 0)
+                    { ShowError("Введите корректное положительное значение скидки (процент или сумма)."); CheckValueTextBox.Focus(); return false; }
+                    if (CheckDiscountPercentageRadio.IsChecked == true && parsedValue > 100) { ShowError("Процент скидки не может быть больше 100."); CheckValueTextBox.Focus(); return false; }
+                    break;
+            }
+
+            return true; // Все проверки пройдены
+        }
+
         // --- Вспомогательные ---
-        private void ShowError(string message)
-        {
-            ErrorText.Text = message;
-            ErrorText.Visibility = Visibility.Visible;
-        }
-        private void ClearError()
-        {
-            ErrorText.Text = string.Empty;
-            ErrorText.Visibility = Visibility.Collapsed;
-        }
+        private void ShowError(string message) { ErrorText.Text = message; ErrorText.Visibility = Visibility.Visible; }
+        private void ClearError() { ErrorText.Text = string.Empty; ErrorText.Visibility = Visibility.Collapsed; }
     }
 }

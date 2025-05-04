@@ -51,7 +51,7 @@
                             <DataGridTextColumn Header="Код (САП)" Binding="{Binding ProductCode}" Width="100"/>
                             <DataGridTextColumn Header="Наименование" Binding="{Binding Name}" Width="*"/>
                             <DataGridTextColumn Header="Штрих-код" Binding="{Binding Barcode}" Width="130"/>
-                            <DataGridTextColumn Header="Цена" Binding="{Binding Price, StringFormat=C}" Width="80"/>
+                            <DataGridTextColumn Header="Цена" Binding="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="80"/>
                             <DataGridCheckBoxColumn Header="Марк." Binding="{Binding IsMarked}" Width="50"/>
                             <DataGridTextColumn Header="ID" Binding="{Binding ProductId}" Width="50"/>
                         </DataGrid.Columns>

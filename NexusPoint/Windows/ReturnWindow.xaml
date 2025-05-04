@@ -24,6 +24,8 @@
             <RowDefinition Height="*"/>
             <!-- Список позиций чека -->
             <RowDefinition Height="Auto"/>
+            <!-- Способ возврата -->
+            <RowDefinition Height="Auto"/>
             <!-- Кнопки действий с чеком/позициями -->
             <RowDefinition Height="Auto"/>
             <!-- Статус/Ошибки -->
@@ -35,9 +37,11 @@
         <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
             <StackPanel Orientation="Horizontal">
                 <Label Content="Номер чека:" VerticalAlignment="Center"/>
-                <TextBox x:Name="CheckNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <TextBox x:Name="CheckNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"
+                         KeyDown="SearchTextBox_KeyDown"/>
                 <Label Content="Номер смены:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"
+                         KeyDown="SearchTextBox_KeyDown"/>
                 <Button x:Name="FindCheckButton" Content="Найти чек" Width="100" Margin="15,0,0,0" Click="FindCheckButton_Click"/>
             </StackPanel>
         </Border>
@@ -65,9 +69,20 @@
                     <GridViewColumn Header="№" DisplayMemberBinding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}, Converter={StaticResource IndexConverter}}" Width="40"/>
                     <GridViewColumn Header="Наименование" DisplayMemberBinding="{Binding ProductName}" Width="300"/>
                     <GridViewColumn Header="Кол-во" DisplayMemberBinding="{Binding Quantity}" Width="70"/>
-                    <GridViewColumn Header="Цена" DisplayMemberBinding="{Binding PriceAtSale, StringFormat=C}" Width="90"/>
-                    <GridViewColumn Header="Скидка" DisplayMemberBinding="{Binding DiscountAmount, StringFormat=C}" Width="80"/>
-                    <GridViewColumn Header="Сумма" DisplayMemberBinding="{Binding ItemTotalAmount, StringFormat=C}" Width="100"/>
+                    <GridViewColumn Header="Возврат кол-во" Width="100">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding ReturnQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                  Width="80" HorizontalAlignment="Center"
+                                  IsEnabled="{Binding CanEditReturnQuantity}"
+                                  PreviewTextInput="QuantityTextBox_PreviewTextInput"/>
+                                <!-- Добавить обработчик PreviewTextInput -->
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="Цена" DisplayMemberBinding="{Binding PriceAtSale, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="90"/>
+                    <GridViewColumn Header="Скидка" DisplayMemberBinding="{Binding DiscountAmount, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="80"/>
+                    <GridViewColumn Header="Сумма" DisplayMemberBinding="{Binding OriginalItemTotalAmount, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="100"/>
                     <GridViewColumn Header="Марк." Width="50">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
@@ -79,18 +94,25 @@
             </ListView.View>
         </ListView>
 
+        <GroupBox Grid.Row="3" Header="Способ возврата средств" Margin="0,5,0,5">
+            <StackPanel Orientation="Horizontal" Margin="10,5">
+                <RadioButton x:Name="ReturnCashRadio" Content="Наличными" GroupName="ReturnMethod" IsChecked="True" Margin="0,0,20,0"/>
+                <RadioButton x:Name="ReturnCardRadio" Content="На карту" GroupName="ReturnMethod"/>
+            </StackPanel>
+        </GroupBox>
+
         <!-- Кнопки действий -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" x:Name="ActionPanel" Visibility="Collapsed" Margin="0,0,0,10">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" x:Name="ActionPanel" Visibility="Collapsed" Margin="0,0,0,10">
             <Button x:Name="ReturnAllButton" Content="Вернуть весь чек" Width="150" Margin="0,0,10,0" Click="ReturnAllButton_Click"/>
             <Button x:Name="ReturnSelectedButton" Content="Вернуть выбранное" Width="150" Click="ReturnSelectedButton_Click"/>
             <TextBlock Text="(Используйте Ctrl или Shift для выбора нескольких позиций)" VerticalAlignment="Center" Margin="15,0,0,0" Foreground="Gray"/>
         </StackPanel>
 
         <!-- Статус / Ошибки -->
-        <TextBlock Grid.Row="4" x:Name="StatusText" Foreground="Red" TextWrapping="Wrap" Margin="0,5"/>
+        <TextBlock Grid.Row="5" x:Name="StatusText" Foreground="Red" TextWrapping="Wrap" Margin="0,5"/>
 
         <!-- Основные кнопки -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="ProcessReturnButton" Content="Оформить возврат" Width="150" Height="30" IsEnabled="False" Click="ProcessReturnButton_Click"/>
             <Button x:Name="CancelButton" Content="Отмена" Width="100" Height="30" Margin="10,0,0,0" IsCancel="True"/>
             <!-- IsCancel закроет окно -->

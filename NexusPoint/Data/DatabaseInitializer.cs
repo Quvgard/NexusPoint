@@ -137,6 +137,7 @@ namespace NexusPoint.Data
                         DiscountId INTEGER PRIMARY KEY AUTOINCREMENT,
                         Name TEXT NOT NULL,
                         Type TEXT NOT NULL CHECK(Type IN ('Процент', 'Сумма', 'Подарок', 'Фикс. цена', 'N+M Подарок', 'Скидка на N-ный', 'Скидка на сумму чека')),
+                        Description TEXT NULL, 
                         IsActive INTEGER NOT NULL DEFAULT 1,
                         StartDate DATETIME NULL,
                         EndDate DATETIME NULL,

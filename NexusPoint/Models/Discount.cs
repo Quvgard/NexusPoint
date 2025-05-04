@@ -13,6 +13,7 @@ namespace NexusPoint.Models
         public string Type { get; set; } // Тип ("Процент", "Сумма", "Подарок", "Фикс. цена", "N+M Подарок", "Скидка на N-ный", "Скидка на сумму чека")
 
         // --- Общие поля ---
+        public string Description { get; set; }
         public bool IsActive { get; set; } = true; // Активна ли
         public DateTime? StartDate { get; set; } // Дата начала
         public DateTime? EndDate { get; set; }   // Дата окончания
