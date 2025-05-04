@@ -23,6 +23,8 @@ using System.Runtime.CompilerServices;
 
 namespace NexusPoint.Windows
 {
+
+
     // Модель для отображения в ListView (добавляем Product)
     public class CheckItemView : CheckItem, INotifyPropertyChanged
     {
@@ -111,6 +113,9 @@ namespace NexusPoint.Windows
         private decimal _totalAmount = 0m;
 
         private DispatcherTimer _clockTimer;
+        private DispatcherTimer _inactivityTimer; // Таймер для автоблокировки
+        private const int InactivityTimeoutMinutes = 15; // Время неактивности в минутах
+        private bool _isLocked = false; // Флаг состояния блокировки
 
         public CashierWindow(User user)
         {
@@ -128,19 +133,143 @@ namespace NexusPoint.Windows
             // Привязка коллекции к ListView
             CheckListView.ItemsSource = CurrentCheckItems;
 
-            //// Настройка часов
-            //SetupClock();
+            // Настройка таймера неактивности
+            InitializeInactivityTimer();
+
+            // Подписка на события активности на уровне окна
+            this.PreviewMouseMove += Window_ActivityDetected;
+            this.PreviewKeyDown += Window_ActivityDetected;
+            // Можно добавить PreviewMouseDown и т.д. по необходимости
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             _originalCheckListViewContextMenu = CheckListView.ContextMenu; // <<--- СОХРАНЯЕМ ОРИГИНАЛ
 
-            CheckOpenShift(); // Проверяем/загружаем смену при загрузке
+            CheckOpenShift();
             UpdateCashierInfo();
-            SetupClock(); // Перенес инициализацию часов сюда
-            ItemInputTextBox.Focus(); // Устанавливаем фокус
+            SetupClock(); // Запускаем часы
+            ItemInputTextBox.Focus();
+
+            // Запускаем таймер неактивности только если окно активно и не заблокировано
+            if (!_isLocked)
+            {
+                ResetInactivityTimer(); // Запуск таймера при загрузке
+            }
         }
+
+        // --- Управление неактивностью и блокировкой ---
+
+        private void InitializeInactivityTimer()
+        {
+            _inactivityTimer = new DispatcherTimer();
+            _inactivityTimer.Interval = TimeSpan.FromMinutes(InactivityTimeoutMinutes);
+            _inactivityTimer.Tick += InactivityTimer_Tick;
+        }
+
+        // Срабатывает при неактивности
+        private void InactivityTimer_Tick(object sender, EventArgs e)
+        {
+            // Блокируем только если окно активно и еще не заблокировано
+            if (this.IsActive && !_isLocked)
+            {
+                LockScreen("Экран заблокирован из-за неактивности.");
+            }
+        }
+
+        // Сброс таймера неактивности при действии пользователя
+        private void ResetInactivityTimer()
+        {
+            _inactivityTimer.Stop();
+            _inactivityTimer.Start();
+            // Debug.WriteLine("Inactivity timer reset."); // Для отладки
+        }
+
+        // Обработчик событий активности окна
+        private void Window_ActivityDetected(object sender, InputEventArgs e)
+        {
+            // Сбрасываем таймер только если экран не заблокирован
+            if (!_isLocked)
+            {
+                ResetInactivityTimer();
+            }
+        }
+
+        // Метод для блокировки экрана
+        private void LockScreen(string lockMessage = "Станция заблокирована.")
+        {
+            if (_isLocked) return; // Уже заблокировано
+
+            _isLocked = true;
+            _inactivityTimer.Stop(); // Останавливаем таймер неактивности
+
+            DisableCheckoutControls();
+
+            // Показываем оверлей с сообщением
+            OverlayText.Text = $"{lockMessage}\nВведите пароль для разблокировки.";
+            OverlayText.Foreground = Brushes.OrangeRed; // Цвет для блокировки
+            OverlayBorder.Visibility = Visibility.Visible;
+
+            // Отключаем основные контролы на всякий случай (хотя оверлей их перекрывает)
+            // DisableCheckoutControls(); // Можно не вызывать, т.к. оверлей блокирует
+
+            // Показываем окно входа МОДАЛЬНО
+            // Передаем логин текущего пользователя для удобства
+            var loginWindow = new LoginWindow(CurrentUser.Username, true); // Используем новый конструктор
+            loginWindow.Owner = this; // Устанавливаем владельца
+
+            // Цикл для повторного показа окна логина при неудаче
+            bool unlocked = false;
+            while (!unlocked && _isLocked) // Повторяем, пока не разблокировано и флаг блокировки стоит
+            {
+                if (loginWindow.ShowDialog() == true)
+                {
+                    // Проверяем, что вошел ТОТ ЖЕ пользователь
+                    if (loginWindow.AuthenticatedUser != null && loginWindow.AuthenticatedUser.UserId == CurrentUser.UserId)
+                    {
+                        UnlockScreen();
+                        unlocked = true; // Выходим из цикла
+                    }
+                    else
+                    {
+                        // Вошел другой пользователь или ошибка - остаемся заблокированными
+                        MessageBox.Show("Для разблокировки необходимо войти под текущим пользователем.", "Ошибка разблокировки", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        // Создаем новое окно логина для следующей попытки
+                        loginWindow = new LoginWindow(CurrentUser.Username, true);
+                        loginWindow.Owner = this;
+                    }
+                }
+                else
+                {
+                    // Пользователь нажал "Отмена" в окне логина - остаемся заблокированными
+                    // Можно либо выйти из цикла и оставить заблокированным, либо показать снова.
+                    // Пока оставляем заблокированным, выйти можно только через успешный логин.
+                    // Если нужно дать возможность отменить блокировку по Esc - нужна другая логика.
+                    // Выход из цикла, если окно логина закрыли крестиком или Esc
+                    break;
+                }
+            }
+
+            // Если после цикла так и не разблокировали (например, закрыли окно логина)
+            if (!unlocked)
+            {
+                // Можно добавить доп. логику, например, полное закрытие кассы или ожидание.
+                // Пока просто остаемся с видимым оверлеем.
+                OverlayText.Text = $"{lockMessage}\nВход не выполнен. Станция остается заблокированной.";
+            }
+        }
+
+        // Метод для разблокировки экрана
+        private void UnlockScreen()
+        {
+            _isLocked = false;
+            HideOverlay(); // Скрываем оверлей
+            EnableCheckoutControls();
+            ResetInactivityTimer(); // Перезапускаем таймер неактивности
+            ItemInputTextBox.Focus(); // Возвращаем фокус
+            ShowTemporaryStatusMessage("Станция разблокирована.", isInfo: true);
+        }
+
 
         // --- Управление сменой и состоянием окна ---
 
@@ -153,12 +282,14 @@ namespace NexusPoint.Windows
                 {
                     ShowOverlay("СМЕНА ЗАКРЫТА.\nНажмите F12 -> Открыть смену.");
                     DisableCheckoutControls();
+                    UpdateMenuItemsState();
                 }
                 else
                 {
                     HideOverlay();
                     EnableCheckoutControls();
                     UpdateShiftInfo();
+                    UpdateMenuItemsState();
                 }
             }
             catch (Exception ex)
@@ -616,29 +747,37 @@ namespace NexusPoint.Windows
 
         // --- Обработчики для MenuItem в Popup для исправления подсветки ---
 
+        // --- Новый метод для обновления состояния пунктов меню ---
+        private void UpdateMenuItemsState()
+        {
+            bool isShiftOpen = CurrentShift != null && !CurrentShift.IsClosed;
+
+            // Используем имена ListBoxItem из XAML
+            OpenShiftItem.IsEnabled = !isShiftOpen; // Открыть можно только если смена закрыта
+            CloseShiftItem.IsEnabled = isShiftOpen; // Закрыть можно только если открыта
+            CashInItem.IsEnabled = isShiftOpen;     // Внесение/Изъятие только при открытой смене
+            CashOutItem.IsEnabled = isShiftOpen;
+            LockStationItem.IsEnabled = !_isLocked; // Блокировать можно если не заблокировано
+            LogoutItem.IsEnabled = true; // Выход доступен всегда? Или тоже блокировать при открытой смене? Решите сами.
+        }
+
         // Обработчик открытия Popup
         private void MainMenuPopup_Opened(object sender, EventArgs e)
         {
+            UpdateMenuItemsState(); // Обновляем состояние перед показом
+
             // Устанавливаем фокус на ListBox, когда Popup открылся
             MenuListBox.Focus();
-            // Опционально: выбираем первый доступный элемент
-            if (MenuListBox.Items.Count > 0)
+            // Выбираем первый ДОСТУПНЫЙ элемент
+            ListBoxItem firstEnabledItem = MenuListBox.Items.OfType<ListBoxItem>().FirstOrDefault(item => item.IsEnabled);
+            if (firstEnabledItem != null)
             {
-                var firstItem = MenuListBox.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
-                if (firstItem != null && firstItem.IsEnabled)
-                {
-                    MenuListBox.SelectedIndex = 0;
-                    // firstItem.Focus(); // Можно попробовать и так, но фокус на ListBox обычно достаточно
-                }
-                else if (MenuListBox.Items.Count > 1)
-                {
-                    // Если первый неактивен, попробуем второй (например, "Закрыть смену")
-                    var secondItem = MenuListBox.ItemContainerGenerator.ContainerFromIndex(1) as ListBoxItem;
-                    if (secondItem != null && secondItem.IsEnabled)
-                    {
-                        MenuListBox.SelectedIndex = 1;
-                    }
-                }
+                MenuListBox.SelectedItem = firstEnabledItem;
+                // firstEnabledItem.Focus(); // Фокус на сам элемент может быть лучше
+            }
+            else
+            {
+                MenuListBox.SelectedIndex = -1; // Снимаем выбор, если ничего не доступно
             }
         }
 
@@ -732,6 +871,7 @@ namespace NexusPoint.Windows
                     UpdateShiftInfo();
                     HideOverlay();
                     EnableCheckoutControls();
+                    UpdateMenuItemsState();
                     ShowTemporaryStatusMessage($"Смена №{CurrentShift.ShiftNumber} открыта.");
                 }
                 catch (Exception ex)
@@ -788,6 +928,7 @@ namespace NexusPoint.Windows
                         UpdateShiftInfo();
                         ShowOverlay("СМЕНА ЗАКРЫТА");
                         DisableCheckoutControls();
+                        UpdateMenuItemsState();
                         ClearCheck(); // Очищаем чек на всякий случай
                     }
                     else
@@ -871,9 +1012,29 @@ namespace NexusPoint.Windows
         private void LockStationMenuItem_Click(object sender, RoutedEventArgs e)
         {
             MainMenuPopup.IsOpen = false;
-            MessageBox.Show("Функция блокировки станции пока не реализована.");
-            // Логика: показать LoginWindow поверх этого окна, после успешного входа - разблокировать
+            LockScreen(); // Вызываем наш новый метод блокировки
         }
+
+         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+         {
+             base.OnClosing(e);
+             _clockTimer?.Stop();
+             _inactivityTimer?.Stop();
+         }
+
+        // Важно: Останавливать таймер неактивности при потере фокуса окном? (Опционально)
+        protected override void OnDeactivated(EventArgs e)
+        {
+            base.OnDeactivated(e);
+            // _inactivityTimer?.Stop(); // Останавливать, если окно неактивно?
+        }
+        // Важно: Запускать таймер неактивности при активации окна? (Опционально)
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+            // if (!_isLocked) ResetInactivityTimer(); // Запускать, если активно и не заблокировано?
+        }
+
 
         private void LogoutMenuItem_Click(object sender, RoutedEventArgs e)
         {

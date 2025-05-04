@@ -3,6 +3,7 @@ using NexusPoint.Models;
 using NexusPoint.Utils;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -38,6 +39,22 @@ namespace NexusPoint.Windows
             // Опционально: Обработка Enter в PasswordBox для вызова логина
             PasswordBox.KeyDown += PasswordBox_KeyDown;
         }
+
+        // НОВЫЙ КОНСТРУКТОР для блокировки
+        public LoginWindow(string defaultUsername, bool preventCancel = false) : this() // Добавляем флаг preventCancel
+        {
+            if (!string.IsNullOrEmpty(defaultUsername))
+            {
+                UsernameTextBox.Text = defaultUsername;
+                Loaded -= (sender, e) => UsernameTextBox.Focus();
+                Loaded += (sender, e) => PasswordBox.Focus();
+            }
+            if (preventCancel) // Если отмена запрещена
+            {
+                CancelButton.IsEnabled = false; // Делаем кнопку Отмена неактивной
+            }
+        }
+
 
         // Обработчик нажатия кнопки "Войти"
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
@@ -151,6 +168,30 @@ namespace NexusPoint.Windows
             LoginButton.IsEnabled = isEnabled;
             CancelButton.IsEnabled = isEnabled;
             // Можно добавить индикатор загрузки (ProgressBar) и управлять его видимостью здесь же
+        }
+
+        // Переопределяем метод закрытия окна
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            base.OnClosing(e);
+
+            // Разрешаем закрытие ТОЛЬКО если DialogResult был установлен (т.е. успешный логин или программное закрытие)
+            // ИЛИ если пользователь нажал кнопку "Отмена" (DialogResult = false)
+            // Мы НЕ хотим блокировать кнопку "Отмена"
+            if (this.DialogResult == null)
+            {
+                // Если DialogResult еще не установлен (например, закрытие через Alt+F4 или крестик)
+                // И если окно вызвано для РАЗБЛОКИРОВКИ (мы можем передать флаг или проверить Owner)
+                if (this.Owner is CashierWindow) // Проверяем, что окно вызвано из CashierWindow (для разблокировки)
+                {
+                    // ЗАПРЕЩАЕМ закрытие окна
+                    e.Cancel = true;
+                    MessageBox.Show("Для продолжения работы необходимо войти в систему.", "Вход обязателен", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+                // Если окно вызвано не для разблокировки (например, первичный вход из MainWindow),
+                // то можно разрешить закрытие (e.Cancel остается false).
+            }
+            // Если DialogResult == true (успешный логин) или DialogResult == false (нажата Отмена), окно закроется само.
         }
     }
 }

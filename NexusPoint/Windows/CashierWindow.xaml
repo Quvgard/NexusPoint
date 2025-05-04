@@ -26,7 +26,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Левая панель: Ввод и Чек -->
-        <Grid Grid.Column="0" Margin="10">
+        <Grid Grid.Column="0" Margin="10" x:Name="LeftPanelGrid">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <!-- Область ввода товара -->
@@ -83,7 +83,7 @@
         </Grid>
 
         <!-- Правая панель: Итоги и Кнопки -->
-        <Grid Grid.Column="1" Margin="10">
+        <Grid Grid.Column="1" Margin="10" x:Name="RightPanelGrid">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <!-- Заголовок -->
@@ -136,7 +136,7 @@
             </UniformGrid>
 
             <!-- Строка состояния и Меню (Двухстрочная) -->
-            <StatusBar Grid.Row="3" VerticalAlignment="Bottom" Padding="0">
+            <StatusBar Grid.Row="3" VerticalAlignment="Bottom" Padding="0" x:Name="MainStatusBar">
                 <StatusBarItem>
                     <!-- Один элемент на всю ширину -->
                     <Grid>
@@ -245,7 +245,7 @@
                         <ListBoxItem x:Name="CashInItem" Content="Внесение наличных"/>
                         <ListBoxItem x:Name="CashOutItem" Content="Изъятие наличных"/>
                         <Separator/>
-                        <ListBoxItem x:Name="LockStationItem" Content="Блокировать" IsEnabled="False"/>
+                        <ListBoxItem x:Name="LockStationItem" Content="Блокировать"/>
                         <ListBoxItem x:Name="LogoutItem" Content="Выход из системы"/>
                     </ListBox>
                 </Border>
