@@ -33,7 +33,9 @@ namespace NexusPoint.Windows
         {
             public int StockItemId { get; set; }
             public int ProductId { get; set; }
-            public string ProductName { get; set; } = "Загрузка..."; // Имя товара
+            public string ProductCode { get; set; } = "..."; // Добавим и Код товара
+            public string Barcode { get; set; } = "...";     // <<--- ДОБАВЛЕНО: Штрих-код
+            public string ProductName { get; set; } = "Загрузка...";
             public decimal Quantity { get; set; }
             public DateTime LastUpdated { get; set; }
         }
@@ -112,39 +114,91 @@ namespace NexusPoint.Windows
             try
             {
                 // 1. Получаем все StockItems
-                var stockItems = _stockItemRepository.GetAllStockItems(); // Добавьте этот метод в StockItemRepository
+                var stockItems = await Task.Run(() => _stockItemRepository.GetAllStockItems()); // Делаем асинхронным
 
-                // Фильтрация по ProductId если есть searchTerm (допустим, ищем по ID товара)
+                // Фильтрация (пока простая, по ProductId, если введено число)
+                // TODO: Реализовать более сложную фильтрацию по коду, ШК, названию, если нужно
+                List<StockItem> filteredStockItems;
                 if (!string.IsNullOrWhiteSpace(searchTerm) && int.TryParse(searchTerm, out int searchProductId))
                 {
-                    stockItems = stockItems.Where(si => si.ProductId == searchProductId);
+                    filteredStockItems = stockItems.Where(si => si.ProductId == searchProductId).ToList();
                 }
-                // TODO: Добавить поиск по названию или коду товара (потребует загрузки Products)
-
-                // 2. Создаем список для отображения
-                currentStockView = new List<StockItemView>();
-                foreach (var si in stockItems)
+                // Здесь можно добавить else if для поиска по строке (коду, ШК, имени),
+                // но это потребует сначала загрузить все продукты.
+                // Пока фильтруем только по ID.
+                else
                 {
-                    currentStockView.Add(new StockItemView
-                    {
-                        StockItemId = si.StockItemId,
-                        ProductId = si.ProductId,
-                        Quantity = si.Quantity,
-                        LastUpdated = si.LastUpdated
-                        // ProductName пока пустой или "Загрузка..."
-                    });
+                    filteredStockItems = stockItems.ToList();
                 }
 
-                StockDataGrid.ItemsSource = null; // Очищаем перед обновлением
+
+                // 2. Создаем список для отображения StockItemView
+                currentStockView = filteredStockItems.Select(si => new StockItemView
+                {
+                    StockItemId = si.StockItemId,
+                    ProductId = si.ProductId,
+                    Quantity = si.Quantity,
+                    LastUpdated = si.LastUpdated
+                    // Остальные поля (Code, Barcode, Name) будут загружены позже
+                }).ToList();
+
+                StockDataGrid.ItemsSource = null;
                 StockDataGrid.ItemsSource = currentStockView;
 
-                // 3. Асинхронно подгружаем имена товаров (чтобы не блокировать UI)
-                await LoadProductNamesForStockViewAsync();
-
+                // 3. Асинхронно подгружаем детали товаров
+                if (currentStockView.Any()) // Загружаем детали, только если есть что отображать
+                {
+                    await LoadProductDetailsForStockViewAsync();
+                }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка загрузки остатков: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // Переименованный и обновленный асинхронный метод для подгрузки деталей
+        private async Task LoadProductDetailsForStockViewAsync()
+        {
+            List<int> productIds = currentStockView.Select(si => si.ProductId).Distinct().ToList();
+            if (!productIds.Any()) return;
+
+            try
+            {
+                // Загружаем нужные продукты одним запросом
+                var products = (await Task.Run(() => _productRepository.GetProductsByIds(productIds)))
+                               .ToDictionary(p => p.ProductId);
+
+                // Обновляем объекты StockItemView в текущем списке
+                foreach (var stockViewItem in currentStockView)
+                {
+                    if (products.TryGetValue(stockViewItem.ProductId, out Product product))
+                    {
+                        stockViewItem.ProductCode = product.ProductCode; // Добавляем Код
+                        stockViewItem.Barcode = product.Barcode;         // Добавляем ШК
+                        stockViewItem.ProductName = product.Name;          // Добавляем Имя
+                    }
+                    else // Если товар вдруг не найден в каталоге (маловероятно, но возможно)
+                    {
+                        stockViewItem.ProductCode = "<Н/Д>";
+                        stockViewItem.Barcode = "<Н/Д>";
+                        stockViewItem.ProductName = "<Товар не найден>";
+                    }
+                }
+
+                // Обновляем DataGrid в потоке UI
+                // Так как мы меняли свойства существующих объектов в currentStockView,
+                // а StockItemView не реализует INotifyPropertyChanged,
+                // простой Refresh может не сработать для обновления колонок.
+                // Надежнее перепривязать источник.
+                StockDataGrid.ItemsSource = null;
+                StockDataGrid.ItemsSource = currentStockView;
+                // Если StockItemView реализует INotifyPropertyChanged, можно было бы использовать:
+                // StockDataGrid.Items.Refresh();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки деталей товаров для остатков: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -277,8 +331,10 @@ namespace NexusPoint.Windows
         }
 
         // --- Обработчики кнопок вкладки "Остатки" ---
-        private void RefreshStockButton_Click(object sender, RoutedEventArgs e) => LoadStockItems();
-        private void SearchStockButton_Click(object sender, RoutedEventArgs e) => LoadStockItems(StockSearchTextBox.Text);
+        private void RefreshStockButton_Click(object sender, RoutedEventArgs e) => LoadStockItems(); 
+
+        private void SearchStockButton_Click(object sender, RoutedEventArgs e) => LoadStockItems(StockSearchTextBox.Text); 
+
         private void ResetStockSearchButton_Click(object sender, RoutedEventArgs e)
         {
             StockSearchTextBox.Clear();

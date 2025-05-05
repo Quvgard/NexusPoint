@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NexusPoint.Windows"
         mc:Ignorable="d"
-        Title="Применение скидки на чек" Height="300" Width="400"
+        Title="Применение скидки на чек" Height="320" Width="400"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -65,8 +65,8 @@
 
         <!-- Кнопки -->
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="OkButton" Content="Применить" Width="100" Height="30" IsDefault="True" Click="OkButton_Click" TabIndex="4"/>
-            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True" TabIndex="5"/>
+            <Button x:Name="OkButton" Content="Применить" Width="100" Height="35" IsDefault="True" Click="OkButton_Click" TabIndex="4"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="35" Margin="10,0,0,0" IsCancel="True" TabIndex="5"/>
         </StackPanel>
 
     </Grid>

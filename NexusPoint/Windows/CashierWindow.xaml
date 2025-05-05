@@ -74,7 +74,7 @@
                 <ListView.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Изменить количество" Click="ChangeQuantityMenuItem_Click"/>
-                        <MenuItem Header="Удалить позицию" Click="DeleteCheckItemMenuItem_Click"/>
+                        <MenuItem Header="Сторно позиции" Click="StornoCheckItemMenuItem_Click"/>
                         <!-- Можно добавить "Применить скидку на позицию" -->
                     </ContextMenu>
                 </ListView.ContextMenu>
@@ -123,7 +123,7 @@
 
                 <!-- Другие кнопки -->
                 <Button x:Name="QuantityButton" Content="[F2] Кол-во" Height="60" FontSize="16" Margin="5" Click="QuantityButton_Click"/>
-                <Button x:Name="DeleteItemButton" Content="[Del] Удалить" Height="60" FontSize="16" Margin="5" Click="DeleteCheckItemButton_Click"/>
+                <Button x:Name="DeleteItemButton" Content="[Del] Удалить" Height="60" FontSize="16" Margin="5" Click="StornoCheckItemButton_Click"/>
                 <Button x:Name="ReturnModeButton" Content="[F6] Возврат" Height="60" FontSize="16" Margin="5" Click="ReturnModeButton_Click"/>
                 <Button x:Name="ManualDiscountButton" Content="[F4] Скидка" Height="60" FontSize="16" Margin="5" Click="ManualDiscountButton_Click"/>
                 
@@ -136,34 +136,36 @@
             </UniformGrid>
 
             <!-- Строка состояния и Меню (Двухстрочная) -->
-            <StatusBar Grid.Row="3" VerticalAlignment="Bottom" Padding="0" x:Name="MainStatusBar">
-                <StatusBarItem>
-                    <!-- Один элемент на всю ширину -->
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <!-- Строка 1: Кассир, Смена -->
-                            <RowDefinition Height="Auto"/>
-                            <!-- Строка 2: Меню, Время -->
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <!-- Левая колонка (растягивается) -->
-                            <ColumnDefinition Width="Auto"/>
-                            <!-- Правая колонка (авторазмер) -->
-                        </Grid.ColumnDefinitions>
+            <Border Grid.Row="3" BorderBrush="LightGray" BorderThickness="0,1,0,0" Padding="5,3" Margin="0,10,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- Строка 1: Кассир -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- Строка 2: Смена -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- Строка 3: Меню и Время -->
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <!-- Левая часть -->
+                        <ColumnDefinition Width="Auto"/>
+                        <!-- Правая часть (для времени) -->
+                    </Grid.ColumnDefinitions>
 
-                        <!-- Строка 1 -->
-                        <TextBlock Grid.Row="0" Grid.Column="0" x:Name="CashierInfoStatusText" Text="Кассир: -" Margin="5,2" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ShiftInfoStatusText" Text="Смена: -" Margin="5,2" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                    <!-- Строка 1: Кассир -->
+                    <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" x:Name="CashierInfoStatusText" Text="Кассир: -" VerticalAlignment="Center" Margin="0,0,0,2"/>
 
-                        <!-- Строка 2 -->
-                        <Button Grid.Row="1" Grid.Column="0" x:Name="MenuButton" Content="Меню [F12]" Padding="5,2" Click="MenuButton_Click" Margin="5,2" VerticalAlignment="Center" HorizontalAlignment="Left"/>
-                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ClockTextBlock" Text="00:00" Margin="5,2" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                    <!-- Строка 2: Смена -->
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ShiftInfoStatusText" Text="Смена: -" VerticalAlignment="Center" Margin="0,0,0,2"/>
 
-                    </Grid>
-                </StatusBarItem>
-            </StatusBar>
+                    <!-- Строка 3: Меню и Время -->
+                    <Button Grid.Row="2" Grid.Column="0" x:Name="MenuButton" Content="Меню [F12]" Padding="5,2" Click="MenuButton_Click" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ClockTextBlock" Text="00:00" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
+                </Grid>
+            </Border>
+            
             <!-- Всплывающее меню для кнопки Меню -->
             <Popup x:Name="MainMenuPopup" PlacementTarget="{Binding ElementName=MenuButton}" Placement="Top" StaysOpen="False"
                    AllowsTransparency="True" PopupAnimation="Fade"
@@ -229,18 +231,24 @@
                             </Setter.Value>
                         </Setter>
                     </Style>
+                    <Style TargetType="{x:Type ListBox}">
+                        <!-- Убираем стандартную рамку фокуса -->
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        <!-- Можно также убрать рамку самого ListBox -->
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </Style>
                 </Popup.Resources>
 
                 <!-- Используем ListBox вместо Menu -->
                 <Border Background="WhiteSmoke" BorderBrush="Gray" BorderThickness="1" CornerRadius="2">
-                    <ListBox x:Name="MenuListBox" BorderThickness="0" Focusable="True"
-                               ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
-                        KeyDown="MenuListBox_KeyDown"
-                        PreviewMouseLeftButtonUp = "MenuListBox_PreviewMouseLeftButtonUp"
-                        MouseDoubleClick="MenuListBox_MouseDoubleClick">
-                       
+                    <ListBox x:Name="MenuListBox" Focusable="True" 
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                               KeyDown="MenuListBox_KeyDown"
+                               PreviewMouseLeftButtonUp="MenuListBox_PreviewMouseLeftButtonUp">
+
                         <ListBoxItem x:Name="OpenShiftItem" Content="Открыть смену"/>
                         <ListBoxItem x:Name="CloseShiftItem" Content="Закрыть смену"/>
+                        <ListBoxItem x:Name="XReportItem" Content="X-Отчет (промежуточный)"/>
                         <Separator/>
                         <ListBoxItem x:Name="CashInItem" Content="Внесение наличных"/>
                         <ListBoxItem x:Name="CashOutItem" Content="Изъятие наличных"/>

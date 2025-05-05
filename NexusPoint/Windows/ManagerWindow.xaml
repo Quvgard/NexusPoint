@@ -91,8 +91,12 @@
                         <!-- Для отображения Названия товара нужен JOIN или доп. модель -->
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="ID Товара" Binding="{Binding ProductId}" Width="80"/>
-                            <!-- <DataGridTextColumn Header="Наименование" Binding="{Binding Product.Name}" Width="*"/> -->
-                            <!-- Так не сработает без доп. логики -->
+                            <DataGridTextColumn Header="Код (САП)" Binding="{Binding ProductCode}" Width="100"/>
+                            <!-- ДОБАВЛЕНО -->
+                            <DataGridTextColumn Header="Штрих-код" Binding="{Binding Barcode}" Width="130"/>
+                            <!-- ДОБАВЛЕНО -->
+                            <DataGridTextColumn Header="Наименование" Binding="{Binding ProductName}" Width="*"/>
+                            <!-- Имя теперь может быть "*" -->
                             <DataGridTextColumn Header="Количество" Binding="{Binding Quantity}" Width="100"/>
                             <DataGridTextColumn Header="Обновлено" Binding="{Binding LastUpdated, StringFormat='dd.MM.yyyy HH:mm'}" Width="140"/>
                             <DataGridTextColumn Header="ID Остатка" Binding="{Binding StockItemId}" Width="80"/>

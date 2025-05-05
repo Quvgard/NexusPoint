@@ -199,30 +199,32 @@ namespace NexusPoint.Windows
         // Метод для блокировки экрана
         private void LockScreen(string lockMessage = "Станция заблокирована.")
         {
-            if (_isLocked) return; // Уже заблокировано
+            if (_isLocked) return;
 
             _isLocked = true;
-            _inactivityTimer.Stop(); // Останавливаем таймер неактивности
+            _inactivityTimer.Stop();
 
-            DisableCheckoutControls();
+            DisableCheckoutControls(); // <<--- Убедимся, что вызвано здесь
 
-            // Показываем оверлей с сообщением
-            OverlayText.Text = $"{lockMessage}\nВведите пароль для разблокировки.";
-            OverlayText.Foreground = Brushes.OrangeRed; // Цвет для блокировки
-            OverlayBorder.Visibility = Visibility.Visible;
+            // Показываем оверлей с сообщением БЛОКИРОВКИ
+            ShowOverlay($"{lockMessage}\nВведите пароль для разблокировки.", Brushes.OrangeRed);
 
-            // Отключаем основные контролы на всякий случай (хотя оверлей их перекрывает)
-            // DisableCheckoutControls(); // Можно не вызывать, т.к. оверлей блокирует
 
             // Показываем окно входа МОДАЛЬНО
-            // Передаем логин текущего пользователя для удобства
-            var loginWindow = new LoginWindow(CurrentUser.Username, true); // Используем новый конструктор
-            loginWindow.Owner = this; // Устанавливаем владельца
+            var loginWindow = new LoginWindow(CurrentUser.Username, true);
+            loginWindow.Owner = this;
 
-            // Цикл для повторного показа окна логина при неудаче
             bool unlocked = false;
             while (!unlocked && _isLocked) // Повторяем, пока не разблокировано и флаг блокировки стоит
             {
+                // Проверяем состояние смены ПОСЛЕ попытки разблокировки
+                bool isShiftStillOpen = CurrentShift != null && !CurrentShift.IsClosed;
+                if (isShiftStillOpen) // Если смена открыта, но не разблокировали
+                {
+                    // Оставляем сообщение о блокировке (красное)
+                    ShowOverlay($"{lockMessage}\nВход не выполнен. Станция остается заблокированной.", Brushes.OrangeRed);
+                }
+
                 if (loginWindow.ShowDialog() == true)
                 {
                     // Проверяем, что вошел ТОТ ЖЕ пользователь
@@ -252,11 +254,15 @@ namespace NexusPoint.Windows
             }
 
             // Если после цикла так и не разблокировали (например, закрыли окно логина)
-            if (!unlocked)
+            if (!unlocked && _isLocked) // Добавил проверку _isLocked, чтобы не переписывать сообщение, если UnlockScreen уже сработал и сменил его
             {
-                // Можно добавить доп. логику, например, полное закрытие кассы или ожидание.
-                // Пока просто остаемся с видимым оверлеем.
-                OverlayText.Text = $"{lockMessage}\nВход не выполнен. Станция остается заблокированной.";
+                // Если смена все еще закрыта, UnlockScreen уже поставил правильное сообщение
+                // Если смена открыта, но вышли из цикла (нажали отмену в login) - ставим сообщение о блокировке
+                if (CurrentShift != null && !CurrentShift.IsClosed)
+                {
+                    OverlayText.Text = $"{lockMessage}\nВход не выполнен. Станция остается заблокированной.";
+                }
+                // Иначе сообщение о закрытой смене уже установлено в UnlockScreen или CheckOpenShift
             }
         }
 
@@ -264,11 +270,33 @@ namespace NexusPoint.Windows
         private void UnlockScreen()
         {
             _isLocked = false;
-            HideOverlay(); // Скрываем оверлей
-            EnableCheckoutControls();
-            ResetInactivityTimer(); // Перезапускаем таймер неактивности
-            ItemInputTextBox.Focus(); // Возвращаем фокус
-            ShowTemporaryStatusMessage("Станция разблокирована.", isInfo: true);
+            // --- ПОВТОРНО ПРОВЕРЯЕМ СОСТОЯНИЕ СМЕНЫ ---
+            // Эта логика похожа на CheckOpenShift, но без обработки ошибок БД
+            bool isShiftOpen = CurrentShift != null && !CurrentShift.IsClosed;
+
+            if (isShiftOpen)
+            {
+                // Если смена открыта - разблокируем полностью
+                HideOverlay();
+                EnableCheckoutControls();
+                ResetInactivityTimer();
+                ItemInputTextBox.Focus();
+                ShowTemporaryStatusMessage("Станция разблокирована.", isInfo: true);
+            }
+            else
+            {
+                // Если смена все еще ЗАКРЫТА - оставляем оверлей с сообщением о смене
+                ShowOverlay("СМЕНА ЗАКРЫТА.\nНажмите F12 -> Открыть смену.", Brushes.White); // Используем белый цвет
+                // Контролы уже должны быть выключены через DisableCheckoutControls,
+                // который был вызван в LockScreen или при первоначальной проверке CheckOpenShift.
+                // На всякий случай, можно вызвать еще раз:
+                DisableCheckoutControls();
+                // Таймер неактивности не запускаем, пока смена закрыта
+                _inactivityTimer.Stop();
+                // Фокус можно оставить на кнопке меню или где-то еще
+                MenuButton.Focus(); // Например, на кнопке меню
+                ShowTemporaryStatusMessage("Станция разблокирована, но смена закрыта.", isInfo: true);
+            }
         }
 
 
@@ -279,31 +307,34 @@ namespace NexusPoint.Windows
             try
             {
                 CurrentShift = _shiftRepository.GetCurrentOpenShift();
+                UpdateMenuItemsState(); // Обновляем меню сразу
+
                 if (CurrentShift == null)
                 {
-                    ShowOverlay("СМЕНА ЗАКРЫТА.\nНажмите F12 -> Открыть смену.");
-                    DisableCheckoutControls();
-                    UpdateMenuItemsState();
+                    ShowOverlay("СМЕНА ЗАКРЫТА.\nНажмите F12 -> Открыть смену.", Brushes.White);
+                    DisableCheckoutControls(); // Используем общий метод
                 }
                 else
                 {
                     HideOverlay();
-                    EnableCheckoutControls();
+                    EnableCheckoutControls(); // Используем общий метод
                     UpdateShiftInfo();
-                    UpdateMenuItemsState();
+                    // Таймер неактивности будет запущен в Window_Loaded или OnActivated
                 }
             }
             catch (Exception ex)
             {
-                ShowOverlay($"ОШИБКА ЗАГРУЗКИ СМЕНЫ:\n{ex.Message}");
-                DisableCheckoutControls();
+                ShowOverlay($"ОШИБКА ЗАГРУЗКИ СМЕНЫ:\n{ex.Message}", Brushes.OrangeRed);
+                DisableCheckoutControls(); // Блокируем контролы при ошибке
                 MessageBox.Show($"Критическая ошибка при проверке смены: {ex.Message}", "Ошибка смены", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void ShowOverlay(string message)
+        private void ShowOverlay(string message, Brush foregroundBrush = null) // Добавляем параметр цвета
         {
             OverlayText.Text = message;
+            // Устанавливаем цвет или используем белый по умолчанию
+            OverlayText.Foreground = foregroundBrush ?? Brushes.White;
             OverlayBorder.Visibility = Visibility.Visible;
         }
 
@@ -349,7 +380,9 @@ namespace NexusPoint.Windows
 
         private void UpdateCashierInfo()
         {
+            // Устанавливаем стандартный текст и цвет
             CashierInfoStatusText.Text = $"Кассир: {CurrentUser.FullName}";
+            CashierInfoStatusText.Foreground = Brushes.Black;
         }
 
         private void UpdateShiftInfo()
@@ -506,32 +539,32 @@ namespace NexusPoint.Windows
         // --- Вспомогательное сообщение в статусной строке ---
         private async void ShowTemporaryStatusMessage(string message, bool isError = false, bool isInfo = false, int durationSeconds = 3)
         {
-            var originalContent = CashierInfoStatusText.Text;
-            var originalForeground = CashierInfoStatusText.Foreground; // Сохраняем исходный цвет
+            // --- ЗАПОМИНАЕМ ИСХОДНОЕ СОСТОЯНИЕ ---
+            var originalContent = $"Кассир: {CurrentUser.FullName}"; // <<--- Всегда восстанавливаем имя кассира
+            var originalForeground = Brushes.Black; // <<--- Стандартный цвет текста StatusBarItem (или возьмите из ресурса)
 
-            CashierInfoStatusText.Text = message;
+            // --- УСТАНАВЛИВАЕМ ВРЕМЕННОЕ СООБЩЕНИЕ ---
+            CashierInfoStatusText.Text = message; // Устанавливаем новое сообщение
             // Устанавливаем цвет в зависимости от флагов
-            if (isError)
-            {
-                CashierInfoStatusText.Foreground = Brushes.Red;
-            }
-            else if (isInfo) // Добавляем проверку на isInfo
-            {
-                CashierInfoStatusText.Foreground = Brushes.Blue; // Используем синий для информации
-            }
-            else // Обычное сообщение - зеленый
-            {
-                CashierInfoStatusText.Foreground = Brushes.Green;
-            }
+            if (isError) { CashierInfoStatusText.Foreground = Brushes.Red; }
+            else if (isInfo) { CashierInfoStatusText.Foreground = Brushes.Blue; }
+            else { CashierInfoStatusText.Foreground = Brushes.Green; }
 
-
-            await Task.Delay(TimeSpan.FromSeconds(durationSeconds));
-
-            // Восстанавливаем, только если сообщение не изменилось
-            if (CashierInfoStatusText.Text == message)
+            // --- ОЖИДАНИЕ ---
+            // Используем try-finally, чтобы гарантировать восстановление, даже если задача будет отменена
+            try
             {
+                await Task.Delay(TimeSpan.FromSeconds(durationSeconds));
+            }
+            finally // Выполняется всегда после Delay
+            {
+                // --- ВОССТАНАВЛИВАЕМ ИСХОДНОЕ СОСТОЯНИЕ ---
+                // Проверяем, не изменилось ли сообщение ЗА ВРЕМЯ ожидания (например, другим вызовом этого же метода)
+                // Если изменилось - НЕ восстанавливаем, чтобы не затереть более новое сообщение.
+                // НО: Если это было сообщение об ошибке, а теперь должно быть имя кассира, то нужно восстановить.
+                // Упрощенная логика: Всегда восстанавливаем имя кассира после задержки.
                 CashierInfoStatusText.Text = originalContent;
-                CashierInfoStatusText.Foreground = originalForeground; // Восстанавливаем исходный цвет
+                CashierInfoStatusText.Foreground = originalForeground;
             }
         }
 
@@ -864,13 +897,13 @@ namespace NexusPoint.Windows
         // Метод для очистки временного сообщения в статус баре
         private void ClearTemporaryStatusMessage()
         {
-            // Проверяем, если текущий текст - это сообщение от ShowTemporaryStatusMessage,
-            // то сбрасываем его на стандартный. Это предотвратит стирание ошибок.
-            // Однако, проще просто сбрасывать всегда, если не показывается ошибка.
-            // if (!CashierInfoStatusText.Foreground == Brushes.Red) { // Не очень надежно
-            CashierInfoStatusText.Text = $"Кассир: {CurrentUser.FullName}"; // Возвращаем стандартный текст
-            CashierInfoStatusText.Foreground = Brushes.Black; // Стандартный цвет
-                                                              // }
+            // Проверяем, что текущий текст - не стандартное имя кассира
+            string defaultText = $"Кассир: {CurrentUser.FullName}";
+            if (CashierInfoStatusText.Text != defaultText)
+            {
+                CashierInfoStatusText.Text = defaultText;
+                CashierInfoStatusText.Foreground = Brushes.Black;
+            }
         }
         private void ShowError(string message)
         {
@@ -921,33 +954,176 @@ namespace NexusPoint.Windows
         }
 
 
-        private void DeleteCheckItemButton_Click(object sender, RoutedEventArgs e)
+        private void StornoCheckItemButton_Click(object sender, RoutedEventArgs e) // Переименовано
         {
-            DeleteSelectedItem();
+            InitiateStorno();
         }
 
-        private void DeleteCheckItemMenuItem_Click(object sender, RoutedEventArgs e)
+        private void StornoCheckItemMenuItem_Click(object sender, RoutedEventArgs e) // Переименовано
         {
-            DeleteSelectedItem();
+            InitiateStorno();
         }
 
-        // Общий метод удаления выбранной позиции
-        private void DeleteSelectedItem()
+        // Общий метод инициирования сторно выбранной позиции
+        private void InitiateStorno()
         {
-            if (CheckListView.SelectedItem is CheckItemView selectedItem)
+            if (!(CheckListView.SelectedItem is CheckItemView selectedItem))
             {
+                ShowTemporaryStatusMessage("Выберите позицию в чеке для сторнирования.", isError: true);
+                return;
+            }
 
-                CurrentCheckItems.Remove(selectedItem); // Удаляем из коллекции (UI обновится)
-                _isManualDiscountApplied = false;
-                UpdateTotals();
-                LastItemInfoText.Text = $"- Удалено: {selectedItem.ProductName} -";
+            // 1. Запрашиваем авторизацию (как раньше)
+            User supervisor = AuthorizeAction("Сторнирование позиции", new[] { "Admin", "Manager" });
+            if (supervisor == null)
+            {
+                ShowTemporaryStatusMessage("Операция сторно отменена или не авторизована.", isError: true);
                 ItemInputTextBox.Focus();
+                return;
+            }
+
+            // 2. --- Выбор типа сторно: Полное или Частичное ---
+            decimal quantityToStorno = 0; // Количество к удалению/уменьшению
+
+            // Если в позиции только 1 шт, сразу предлагаем полное удаление
+            if (selectedItem.Quantity <= 1)
+            {
+                // Подтверждение полного удаления
+                MessageBoxResult confirmResult = MessageBox.Show(
+                    $"Вы уверены, что хотите полностью сторнировать позицию:\n'{selectedItem.ProductName}' (Кол-во: {selectedItem.Quantity})?",
+                    "Полное сторно", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+
+                if (confirmResult == MessageBoxResult.Yes)
+                {
+                    quantityToStorno = selectedItem.Quantity; // Удаляем всё
+                }
+                else
+                {
+                    ShowTemporaryStatusMessage("Сторно отменено.", isInfo: true);
+                    ItemInputTextBox.Focus();
+                    return; // Отмена
+                }
+            }
+            else // Если количество > 1, даем выбор
+            {
+                // Используем InputDialog для ввода количества к сторнированию
+                var stornoQtyDialog = new InputDialog(
+                    "Частичное сторно",
+                    $"Введите количество товара '{selectedItem.ProductName}',\nкоторое нужно СТОРНИРОВАТЬ (убрать) из чека.\n(Макс: {selectedItem.Quantity}, 0 = отмена):",
+                    "1"); // Предлагаем убрать 1 по умолчанию
+                stornoQtyDialog.Owner = this;
+
+                if (stornoQtyDialog.ShowDialog() == true)
+                {
+                    if (!decimal.TryParse(stornoQtyDialog.InputText, NumberStyles.Any, CultureInfo.CurrentCulture, out quantityToStorno) || quantityToStorno < 0)
+                    {
+                        ShowTemporaryStatusMessage("Некорректное количество для сторно.", isError: true);
+                        ItemInputTextBox.Focus();
+                        return; // Ошибка ввода
+                    }
+                    if (quantityToStorno == 0)
+                    {
+                        ShowTemporaryStatusMessage("Сторно отменено (введено 0).", isInfo: true);
+                        ItemInputTextBox.Focus();
+                        return; // Отмена
+                    }
+                    if (quantityToStorno > selectedItem.Quantity)
+                    {
+                        ShowTemporaryStatusMessage($"Нельзя сторнировать {quantityToStorno} шт., в позиции только {selectedItem.Quantity} шт.", isError: true);
+                        ItemInputTextBox.Focus();
+                        return; // Ошибка - ввели больше, чем есть
+                    }
+                    // Если ввели полное количество - уточняем
+                    if (quantityToStorno == selectedItem.Quantity)
+                    {
+                        MessageBoxResult confirmFullResult = MessageBox.Show(
+                            $"Вы ввели количество для полного сторнирования позиции. Продолжить?",
+                            "Полное сторно", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.Yes);
+                        if (confirmFullResult == MessageBoxResult.No)
+                        {
+                            ShowTemporaryStatusMessage("Сторно отменено.", isInfo: true);
+                            ItemInputTextBox.Focus();
+                            return; // Отмена полного сторно
+                        }
+                    }
+                }
+                else // Нажали "Отмена" в диалоге ввода количества
+                {
+                    ShowTemporaryStatusMessage("Сторно отменено.", isInfo: true);
+                    ItemInputTextBox.Focus();
+                    return; // Отмена
+                }
+            } // Конец блока else (если количество > 1)
+
+
+            // 3. --- Выполнение сторно (Полное или Частичное) ---
+            if (quantityToStorno > 0)
+            {
+                if (quantityToStorno >= selectedItem.Quantity) // Полное удаление
+                {
+                    CurrentCheckItems.Remove(selectedItem);
+                    LastItemInfoText.Text = $"- СТОРНО (полностью): {selectedItem.ProductName} (Авториз.: {supervisor.Username}) -";
+                    ShowTemporaryStatusMessage($"Позиция '{selectedItem.ProductName}' полностью сторнирована.", isInfo: true);
+                }
+                else // Частичное сторно (уменьшение количества)
+                {
+                    // Уменьшаем количество у существующего объекта CheckItemView
+                    selectedItem.Quantity -= quantityToStorno;
+                    LastItemInfoText.Text = $"- СТОРНО (частично): {selectedItem.ProductName} убрано {quantityToStorno} шт. (Авториз.: {supervisor.Username}) -";
+                    ShowTemporaryStatusMessage($"Количество '{selectedItem.ProductName}' уменьшено на {quantityToStorno}.", isInfo: true);
+                    // UI должен обновиться сам из-за INotifyPropertyChanged в CheckItemView
+                }
+
+                _isManualDiscountApplied = false; // Сбрасываем флаг ручной скидки в любом случае
+                UpdateTotals(); // Пересчитываем итоги
+            }
+
+            ItemInputTextBox.Focus(); // Возвращаем фокус
+        }
+
+
+        // --- Метод для авторизации действия ---
+        /// <summary>
+        /// Показывает окно входа для авторизации действия.
+        /// </summary>
+        /// <param name="actionName">Название действия для заголовка окна.</param>
+        /// <param name="allowedRoles">Массив ролей, которым разрешено это действие.</param>
+        /// <returns>Объект User авторизованного пользователя или null, если авторизация не удалась.</returns>
+        private User AuthorizeAction(string actionName, string[] allowedRoles)
+        {
+            if (allowedRoles == null || !allowedRoles.Any())
+            {
+                // Если роли не заданы, действие запрещено по умолчанию
+                MessageBox.Show("Действие не настроено для выполнения.", "Ошибка конфигурации", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return null;
+            }
+
+            // Создаем окно логина БЕЗ предзаполнения логина и БЕЗ блокировки отмены
+            var authWindow = new LoginWindow();
+            authWindow.Owner = this;
+            authWindow.Title = $"Авторизация: {actionName}"; // Меняем заголовок
+
+            if (authWindow.ShowDialog() == true)
+            {
+                // Проверяем роль вошедшего пользователя
+                if (authWindow.AuthenticatedUser != null &&
+                    allowedRoles.Contains(authWindow.AuthenticatedUser.Role)) // Проверяем наличие роли в списке разрешенных
+                {
+                    return authWindow.AuthenticatedUser; // Авторизация успешна
+                }
+                else
+                {
+                    MessageBox.Show($"У пользователя '{authWindow.AuthenticatedUser?.Username ?? "???"}' недостаточно прав для выполнения действия '{actionName}'.\nТребуемые роли: {string.Join(", ", allowedRoles)}",
+                                    "Доступ запрещен", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return null; // Недостаточно прав
+                }
             }
             else
             {
-                ShowTemporaryStatusMessage("Выберите товар в чеке для удаления.", isError: true);
+                return null; // Окно авторизации было закрыто (Отмена)
             }
         }
+
 
         private void ReturnModeButton_Click(object sender, RoutedEventArgs e)
         {
@@ -1056,6 +1232,7 @@ namespace NexusPoint.Windows
             // Используем имена ListBoxItem из XAML
             OpenShiftItem.IsEnabled = !isShiftOpen; // Открыть можно только если смена закрыта
             CloseShiftItem.IsEnabled = isShiftOpen; // Закрыть можно только если открыта
+            XReportItem.IsEnabled = isShiftOpen;
             CashInItem.IsEnabled = isShiftOpen;     // Внесение/Изъятие только при открытой смене
             CashOutItem.IsEnabled = isShiftOpen;
             LockStationItem.IsEnabled = !_isLocked; // Блокировать можно если не заблокировано
@@ -1067,19 +1244,27 @@ namespace NexusPoint.Windows
         {
             UpdateMenuItemsState(); // Обновляем состояние перед показом
 
-            // Устанавливаем фокус на ListBox, когда Popup открылся
-            MenuListBox.Focus();
-            // Выбираем первый ДОСТУПНЫЙ элемент
-            ListBoxItem firstEnabledItem = MenuListBox.Items.OfType<ListBoxItem>().FirstOrDefault(item => item.IsEnabled);
+            // --- ИЗМЕНЕНО: Устанавливаем фокус на ПЕРВЫЙ ЭЛЕМЕНТ ---
+            // Находим первый ВКЛЮЧЕННЫЙ элемент
+            ListBoxItem firstEnabledItem = MenuListBox.Items.OfType<ListBoxItem>()
+                                            .Select(item => MenuListBox.ItemContainerGenerator.ContainerFromItem(item) as ListBoxItem)
+                                            .FirstOrDefault(container => container != null && container.IsEnabled);
+
             if (firstEnabledItem != null)
             {
+                // Устанавливаем фокус на найденный элемент
+                firstEnabledItem.Focus();
+                // Выделяем его (опционально, но улучшает вид)
                 MenuListBox.SelectedItem = firstEnabledItem;
-                // firstEnabledItem.Focus(); // Фокус на сам элемент может быть лучше
             }
             else
             {
-                MenuListBox.SelectedIndex = -1; // Снимаем выбор, если ничего не доступно
+                // Если нет активных элементов, фокус остается на кнопке или уходит куда-то еще
+                MenuListBox.SelectedIndex = -1; // Снимаем выбор
+                // Можно попробовать установить фокус обратно на кнопку Меню?
+                // MenuButton.Focus();
             }
+            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
         }
 
         // Обработка нажатия Enter или двойного клика на элементе ListBox
@@ -1099,6 +1284,9 @@ namespace NexusPoint.Windows
                     case "CloseShiftItem":
                         CloseShiftMenuItem_Click(selectedItem, null);
                         break;
+                    case "XReportItem": 
+                        PrintXReportMenuItem_Click(selectedItem, null); 
+                        break;
                     case "CashInItem":
                         CashInMenuItem_Click(selectedItem, null);
                         break;
@@ -1115,6 +1303,81 @@ namespace NexusPoint.Windows
             }
         }
 
+        // --- Новый обработчик для пункта X-Отчет ---
+        private async void PrintXReportMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (CurrentShift == null || CurrentShift.IsClosed)
+            {
+                MessageBox.Show("Для печати X-отчета необходимо открыть смену.", "Смена закрыта", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                ShowTemporaryStatusMessage("Формирование X-отчета...", isInfo: true, durationSeconds: 5);
+                string report = await GenerateXReportAsync(CurrentShift); // Вызываем асинхронный генератор
+                PrinterService.Print($"X-Отчет (Смена №{CurrentShift.ShiftNumber})", report);
+                ClearTemporaryStatusMessage();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при формировании X-отчета: {ex.Message}", "Ошибка отчета", MessageBoxButton.OK, MessageBoxImage.Error);
+                ClearTemporaryStatusMessage();
+            }
+        }
+
+        // --- Новый АСИНХРОННЫЙ метод для генерации X-Отчета ---
+        private async Task<string> GenerateXReportAsync(Shift shift)
+        {
+            // Получаем актуальные данные по чекам и операциям ящика для ТЕКУЩЕЙ смены
+            var checksTask = Task.Run(() => _checkRepository.GetChecksByShiftId(shift.ShiftId).ToList());
+            var cashOpsTask = Task.Run(() => _cashDrawerRepository.GetOperationsByShiftId(shift.ShiftId).ToList());
+            var cashierTask = Task.Run(() => _userRepository.GetUserById(shift.OpeningUserId)); // Кассир, открывший смену
+
+            await Task.WhenAll(checksTask, cashOpsTask, cashierTask);
+
+            var checks = checksTask.Result;
+            var cashOps = cashOpsTask.Result;
+            var openingCashier = cashierTask.Result;
+
+            // Расчет итогов (аналогично CloseShift, но без сохранения в БД смены)
+            decimal totalSales = checks.Where(c => !c.IsReturn).Sum(c => c.TotalAmount);
+            decimal totalReturns = checks.Where(c => c.IsReturn).Sum(c => c.TotalAmount);
+            decimal cashSales = checks.Where(c => !c.IsReturn).Sum(c => c.PaymentType == "Cash" ? c.TotalAmount : c.PaymentType == "Mixed" ? c.CashPaid : 0);
+            decimal cardSales = checks.Where(c => !c.IsReturn).Sum(c => c.PaymentType == "Card" ? c.TotalAmount : c.PaymentType == "Mixed" ? c.CardPaid : 0);
+            decimal cashReturns = checks.Where(c => c.IsReturn && (c.PaymentType == "Cash" || c.PaymentType == "Mixed")).Sum(c => c.TotalAmount - c.CardPaid); // Возвраты наличными (упрощенно)
+                                                                                                                                                               // Или используем способ, который был определен при возврате? Если мы его храним. Пока считаем все наличные возвраты.
+
+            decimal cashAdded = cashOps.Where(co => co.OperationType == "CashIn").Sum(co => co.Amount);
+            decimal cashRemoved = cashOps.Where(co => co.OperationType == "CashOut").Sum(co => co.Amount);
+            decimal currentCashTheoretic = shift.StartCash + cashSales + cashAdded - cashRemoved - cashReturns;
+
+            // Формирование текста отчета
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine($"--- X-Отчет (Промежуточный) ---");
+            sb.AppendLine($"Смена №: {shift.ShiftNumber}");
+            sb.AppendLine($"Открыта: {shift.OpenTimestamp:G}");
+            sb.AppendLine($"Текущее время: {DateTime.Now:G}");
+            sb.AppendLine($"Кассир: {openingCashier?.FullName ?? "-"} (Открыл)");
+            sb.AppendLine($"---------------------------------");
+            sb.AppendLine($"Начальный остаток нал.: {shift.StartCash:C}");
+            sb.AppendLine($"Внесения: {cashAdded:C}");
+            sb.AppendLine($"Изъятия: {cashRemoved:C}");
+            sb.AppendLine($"---------------------------------");
+            sb.AppendLine($"Продажи (Итог): {totalSales:C}");
+            sb.AppendLine($"  в т.ч. наличными: {cashSales:C}");
+            sb.AppendLine($"  в т.ч. картой: {cardSales:C}");
+            sb.AppendLine($"Возвраты (Итог): {totalReturns:C}");
+            sb.AppendLine($"  (возвращено наличными: {cashReturns:C})"); // Примерно
+            sb.AppendLine($"---------------------------------");
+            sb.AppendLine($"Наличных в кассе (теор.): {currentCashTheoretic:C}");
+            sb.AppendLine($"=================================");
+            sb.AppendLine("(Отчет без гашения)");
+
+            return sb.ToString();
+        }
+
+
         private void MenuListBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter || e.Key == Key.Space) // Enter или Пробел для выбора
@@ -1129,21 +1392,6 @@ namespace NexusPoint.Windows
                 e.Handled = true;
             }
         }
-
-        private void MenuListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            // Проверяем, что двойной клик был именно на элементе списка
-            if (e.Source is FrameworkElement element &&
-                (element.DataContext is ListBoxItem || // Клик на самом элементе
-                element.TemplatedParent is ListBoxItem)) // Клик на элементе внутри шаблона
-            {
-                ExecuteSelectedMenuItem();
-                e.Handled = true;
-            }
-        }
-
-
-
 
         // --- Меню (F12) ---
         private void MenuButton_Click(object sender, RoutedEventArgs e)
@@ -1186,10 +1434,10 @@ namespace NexusPoint.Windows
             }
         }
 
-        private void CloseShiftMenuItem_Click(object sender, RoutedEventArgs e)
+        private async void CloseShiftMenuItem_Click(object sender, RoutedEventArgs e)
         {
             MainMenuPopup.IsOpen = false;
-            if (CurrentShift == null)
+            if (CurrentShift == null || CurrentShift.IsClosed)
             {
                 MessageBox.Show("Нет открытой смены для закрытия.", "Информация", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -1206,7 +1454,7 @@ namespace NexusPoint.Windows
                     {
                         // Получаем данные закрытой смены для Z-отчета (имитация)
                         var closedShift = _shiftRepository.GetShiftById(CurrentShift.ShiftId);
-                        string zReport = $"--- Z-Отчет (Имитация) ---\n";
+                        string zReport = $"--- Z-Отчет ---\n";
                         zReport += $"Смена №: {closedShift.ShiftNumber}\n";
                         zReport += $"Открыта: {closedShift.OpenTimestamp:G}\n";
                         zReport += $"Закрыта: {closedShift.CloseTimestamp:G}\n";
@@ -1348,25 +1596,19 @@ namespace NexusPoint.Windows
         // --- ОБРАБОТЧИК КЛИКА МЫШИ ---
         private void MenuListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            // Проверяем, был ли клик действительно на элементе ListBoxItem
             DependencyObject dep = (DependencyObject)e.OriginalSource;
-
-            // Поднимаемся по дереву элементов, чтобы найти ListBoxItem
             while ((dep != null) && !(dep is ListBoxItem))
             {
                 dep = VisualTreeHelper.GetParent(dep);
             }
 
-            // Если клик был на ListBoxItem
-            if (dep is ListBoxItem clickedItem)
+            if (dep is ListBoxItem clickedItem && clickedItem.IsEnabled) // Проверяем, что элемент активен
             {
-                // Убедимся, что этот элемент действительно выбран (на всякий случай)
-                // Хотя обычно клик его и выбирает
+                // Выделяем кликнутый элемент
                 MenuListBox.SelectedItem = clickedItem;
-
-                // Выполняем действие для выбранного элемента
+                // Выполняем действие
                 ExecuteSelectedMenuItem();
-                e.Handled = true; // Помечаем событие как обработанное
+                e.Handled = true;
             }
         }
 
@@ -1388,7 +1630,7 @@ namespace NexusPoint.Windows
                         e.Handled = true;
                         break;
                     case Key.Delete: // Удалить позицию
-                        if (DeleteItemButton.IsEnabled) DeleteSelectedItem();
+                        if (DeleteItemButton.IsEnabled) InitiateStorno();
                         e.Handled = true;
                         break;
                     case Key.F5: // Оплата
