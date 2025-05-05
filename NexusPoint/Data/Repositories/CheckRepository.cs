@@ -59,13 +59,16 @@ namespace NexusPoint.Data.Repositories
 
                         // 2. Вставить позиции чека
                         string insertItemQuery = @"
-                           INSERT INTO CheckItems (CheckId, ProductId, Quantity, PriceAtSale, ItemTotalAmount, DiscountAmount)
-                            VALUES (@CheckId, @ProductId, @Quantity, @PriceAtSale, @ItemTotalAmount, @DiscountAmount);";
+                           INSERT INTO CheckItems (CheckId, ProductId, Quantity, PriceAtSale, ItemTotalAmount, DiscountAmount, AppliedDiscountId)
+                            VALUES (@CheckId, @ProductId, @Quantity, @PriceAtSale, @ItemTotalAmount, @DiscountAmount, @AppliedDiscountId);";
 
                         foreach (var item in check.Items)
                         {
-                            item.CheckId = newCheckId; // Установить ID чека для позиции
-                            connection.Execute(insertItemQuery, item, transaction);
+                            // Пересчитываем ItemTotalAmount перед сохранением
+                            item.ItemTotalAmount = Math.Round(item.Quantity * item.PriceAtSale - item.DiscountAmount, 2);
+
+                            item.CheckId = newCheckId;
+                            connection.Execute(insertItemQuery, item, transaction); // Dapper сам возьмет AppliedDiscountId из объекта item
 
                             // 3. Обновить остатки товаров (списание при продаже, возврат при возврате)
                             decimal quantityChange = check.IsReturn ? item.Quantity : -item.Quantity; // Если возврат - добавляем, если продажа - вычитаем

@@ -22,6 +22,22 @@ namespace NexusPoint.Data.Repositories
             }
         }
 
+        public IEnumerable<Discount> GetDiscountsByIds(IEnumerable<int> discountIds)
+        {
+            // Проверка на пустой список ID
+            if (discountIds == null || !discountIds.Any())
+            {
+                return Enumerable.Empty<Discount>(); // Возвращаем пустую коллекцию
+            }
+
+            using (var connection = DatabaseHelper.GetConnection())
+            {
+                // Используем оператор IN для выборки по списку ID
+                string query = "SELECT * FROM Discounts WHERE DiscountId IN @Ids";
+                return connection.Query<Discount>(query, new { Ids = discountIds });
+            }
+
+        }
         public Discount GetDiscountById(int discountId)
         {
             using (var connection = DatabaseHelper.GetConnection())

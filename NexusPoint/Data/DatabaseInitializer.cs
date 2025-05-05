@@ -125,8 +125,10 @@ namespace NexusPoint.Data
                         PriceAtSale REAL NOT NULL,
                         ItemTotalAmount REAL NOT NULL,
                         DiscountAmount REAL DEFAULT 0,
+                        AppliedDiscountId INTEGER NULL, 
                         FOREIGN KEY (CheckId) REFERENCES Checks(CheckId) ON DELETE CASCADE,
-                        FOREIGN KEY (ProductId) REFERENCES Products(ProductId)
+                        FOREIGN KEY (ProductId) REFERENCES Products(ProductId),
+                        FOREIGN KEY (AppliedDiscountId) REFERENCES Discounts(DiscountId) ON DELETE SET NULL 
                     );");
                     System.Diagnostics.Debug.WriteLine("CheckItems table checked/created.");
 

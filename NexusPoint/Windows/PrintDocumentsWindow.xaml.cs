@@ -3,6 +3,7 @@ using NexusPoint.Models;
 using NexusPoint.Utils;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -31,8 +32,10 @@ namespace NexusPoint.Windows
         private readonly ShiftRepository _shiftRepository; // Нужен для поиска смены по номеру
         private readonly UserRepository _userRepository;
         private readonly ProductRepository _productRepository; // Нужен для товарного чека
+        private readonly DiscountRepository _discountRepository;
 
         private CheckDisplayView _selectedCheck = null; // Храним выбранный чек для действий
+        private CultureInfo _russianCulture = new CultureInfo("ru-RU");
 
         public PrintDocumentsWindow()
         {
@@ -41,12 +44,38 @@ namespace NexusPoint.Windows
             _shiftRepository = new ShiftRepository();
             _userRepository = new UserRepository();
             _productRepository = new ProductRepository();
+            _discountRepository = new DiscountRepository();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            try
+            {
+                var currentShift = _shiftRepository.GetCurrentOpenShift();
+                if (currentShift != null)
+                {
+                    ShiftNumberTextBox.Text = currentShift.ShiftNumber.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Не удалось определить тек. смену: {ex.Message}");
+                // Оставляем поле пустым
+            }
+
             CheckNumberTextBox.Focus();
             UpdateActionButtonsState(); // Изначально кнопки неактивны
+        }
+
+        //KeyDown для полей поиска
+        private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                // Вызываем тот же метод, что и кнопка "Найти чек"
+                FindCheckButton_Click(FindCheckButton, new RoutedEventArgs());
+                e.Handled = true; // Поглощаем Enter, чтобы он не обрабатывался дальше
+            }
         }
 
         // Поиск чека
@@ -263,33 +292,33 @@ namespace NexusPoint.Windows
             {
                 string productName = products.TryGetValue(item.ProductId, out Product p) ? p.Name : "<Товар?>";
                 sb.AppendLine($"{productName}");
-                sb.AppendLine($"  {item.Quantity} x {item.PriceAtSale:N2} = {item.Quantity * item.PriceAtSale:N2}");
+                sb.AppendLine($"  {item.Quantity} x {item.PriceAtSale.ToString("N2", _russianCulture)} = {(item.Quantity * item.PriceAtSale).ToString("N2", _russianCulture)}");
                 if (item.DiscountAmount > 0)
                 {
-                    sb.AppendLine($"  Скидка: {item.DiscountAmount:N2}");
+                    sb.AppendLine($"  Скидка: {item.DiscountAmount.ToString("N2", _russianCulture)}");
                 }
-                sb.AppendLine($"  ИТОГ ПО ПОЗИЦИИ: {item.ItemTotalAmount:N2}");
+                sb.AppendLine($"  ИТОГ ПО ПОЗИЦИИ: {item.ItemTotalAmount.ToString("N2", _russianCulture)}");
             }
             sb.AppendLine("---------------------------------");
-            sb.AppendLine($"ПОДЫТОГ: {check.Items.Sum(i => i.Quantity * i.PriceAtSale):N2}");
+            sb.AppendLine($"ПОДЫТОГ: {check.Items.Sum(i => i.Quantity * i.PriceAtSale).ToString("N2", _russianCulture)}");
             if (check.DiscountAmount > 0)
             {
-                sb.AppendLine($"СКИДКА НА ЧЕК: {check.DiscountAmount:N2}");
+                sb.AppendLine($"СКИДКА НА ЧЕК: {check.DiscountAmount.ToString("N2", _russianCulture)}");
             }
-            sb.AppendLine($"ИТОГО: {check.TotalAmount:N2}");
+            sb.AppendLine($"ИТОГО: {check.TotalAmount.ToString("N2", _russianCulture)}");
             sb.AppendLine("---------------------------------");
             string paymentTypeText = check.PaymentType == "Cash" ? "НАЛИЧНЫМИ" :
                                       check.PaymentType == "Card" ? "КАРТОЙ" : "СМЕШАННАЯ";
-            sb.AppendLine($"ОПЛАТА ({paymentTypeText}): {check.TotalAmount:N2}");
+            sb.AppendLine($"ОПЛАТА ({paymentTypeText}): {check.TotalAmount.ToString("C", _russianCulture)}");
             if (check.PaymentType == "Cash" || check.PaymentType == "Mixed")
-                sb.AppendLine($"  ПОЛУЧЕНО НАЛ: {check.CashPaid:N2}");
+                sb.AppendLine($"  ПОЛУЧЕНО НАЛ: {check.CashPaid.ToString("C", _russianCulture)}");
             if (check.PaymentType == "Card" || check.PaymentType == "Mixed")
-                sb.AppendLine($"  ПОЛУЧЕНО КАРТОЙ: {check.CardPaid:N2}");
+                sb.AppendLine($"  ПОЛУЧЕНО КАРТОЙ: {check.CardPaid.ToString("C", _russianCulture)}");
             decimal change = (check.CashPaid + check.CardPaid) - check.TotalAmount;
             // Корректный расчет сдачи для копии (если не хранится)
-            if (!check.IsReturn && change > 0.001m) // Показываем сдачу для продаж
+            if (!check.IsReturn && change > 0.001m)
             {
-                sb.AppendLine($"СДАЧА: {change:N2}");
+                sb.AppendLine($"СДАЧА: {change.ToString("C", _russianCulture)}");
             }
             sb.AppendLine("---------------------------------");
             sb.AppendLine($"ФН: 999900001111222   ФД: {check.CheckId + 10000}  ФП: 1234567890"); // Пример ФПД
@@ -319,41 +348,84 @@ namespace NexusPoint.Windows
             {
                 string productName = products.TryGetValue(item.ProductId, out Product p) ? p.Name : "<Товар?>";
                 // Форматируем строку таблицы (примерно)
-                sb.AppendFormat("|{0,3}| {1,-28}|{2,8}|{3,7:N2}|{4,7:N2}|\n",
+                sb.AppendFormat("|{0,3}| {1,-28}|{2,8}|{3,7}|{4,7}|\n",
                                index++,
                                productName.Length > 28 ? productName.Substring(0, 28) : productName, // Обрезаем длинные названия
                                item.Quantity,
-                               item.PriceAtSale, // Цена за единицу
-                               item.ItemTotalAmount); // Сумма по позиции с учетом скидки
+                               item.PriceAtSale.ToString("N2", _russianCulture), // Форматируем здесь
+                               item.ItemTotalAmount.ToString("N2", _russianCulture)); // Форматируем здесь
             }
             sb.AppendLine("--------------------------------------------------");
-            sb.AppendLine($"Всего наименований: {check.Items.Count}, на сумму: {check.TotalAmount:N2} руб.");
+            sb.AppendLine($"Всего наименований: {check.Items.Count}, на сумму: {check.TotalAmount.ToString("C", _russianCulture)}");
             if (check.DiscountAmount > 0)
             {
-                sb.AppendLine($"В том числе скидка: {check.DiscountAmount:N2} руб.");
+                sb.AppendLine($"В том числе скидка: {check.DiscountAmount.ToString("N2", _russianCulture)} руб.");
             }
             sb.AppendLine("\nПодпись кассира: __________________");
 
 
-            MessageBox.Show(sb.ToString(), "Имитация печати товарного чека", MessageBoxButton.OK, MessageBoxImage.Information);
+            PrinterService.Print($"Товарный чек №{check.CheckNumber}", sb.ToString());
             ShowError("Товарный чек 'отправлен на печать'.", isInfo: true);
         }
 
-        private void PrintDiscountDetails(CheckDisplayView check)
+        private async void PrintDiscountDetails(CheckDisplayView check)
         {
-            // Имитация печати расшифровки скидок (как в PDF стр. 24)
             StringBuilder sb = new StringBuilder();
             sb.AppendLine($"--- Расшифровка скидок к чеку №{check.CheckNumber} ---");
-            if (check.DiscountAmount > 0)
-            {
-                // TODO: Реализовать логику получения НАЗВАНИЙ скидок/акций,
-                // примененных к позициям чека. Текущая БД хранит только сумму скидки.
-                // Это потребует доработки БД (см. предыдущие обсуждения) или
-                // сложной логики восстановления скидок по сумме (не рекомендуется).
 
-                // Пока выводим общую информацию:
-                sb.AppendLine("Применены скидки на общую сумму: " + check.DiscountAmount.ToString("C"));
-                sb.AppendLine("\n(Детальная расшифровка по акциям не реализована в этой версии)");
+            if (check.DiscountAmount > 0 && check.Items != null && check.Items.Any())
+            {
+                // 1. Собираем ID всех примененных скидок
+                var appliedDiscountIds = check.Items
+                                            .Where(i => i.AppliedDiscountId.HasValue)
+                                            .Select(i => i.AppliedDiscountId.Value)
+                                            .Distinct()
+                                            .ToList();
+
+                Dictionary<int, Discount> discountsInfo = new Dictionary<int, Discount>();
+                if (appliedDiscountIds.Any())
+                {
+                    // 2. Загружаем информацию об этих скидках
+                    try
+                    {
+                        // Добавляем метод GetDiscountsByIds в DiscountRepository
+                        discountsInfo = (await Task.Run(() => _discountRepository.GetDiscountsByIds(appliedDiscountIds)))
+                                        .ToDictionary(d => d.DiscountId);
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine($"\n(Ошибка загрузки названий скидок: {ex.Message})");
+                    }
+                }
+
+                // 3. Формируем текст расшифровки
+                sb.AppendLine("Примененные акции:");
+                bool discountFound = false;
+                foreach (var item in check.Items)
+                {
+                    if (item.AppliedDiscountId.HasValue && item.DiscountAmount > 0)
+                    {
+                        string discountName = discountsInfo.TryGetValue(item.AppliedDiscountId.Value, out Discount discount)
+                                              ? discount.Name
+                                              : $"<Скидка ID: {item.AppliedDiscountId.Value}>"; // Показываем ID, если название не найдено
+
+                        // Загружаем название товара
+                        Product product = await Task.Run(() => _productRepository.FindProductById(item.ProductId));
+                        string productName = product?.Name ?? "<Товар?>";
+
+                        sb.AppendLine($"- К товару '{productName}': Акция '{discountName}' (Скидка: {item.DiscountAmount:C})");
+                        discountFound = true;
+                    }
+                }
+
+                // Если были скидки, но не привязанные к ID (например, ручная общая - пока не обрабатывается)
+                if (!discountFound)
+                {
+                    sb.AppendLine($"(Общая скидка на чек: {check.DiscountAmount:C})");
+                    // TODO: Добавить логику сохранения ручных скидок, если нужно их отображать отдельно
+                }
+
+                sb.AppendLine("\nОбщая сумма скидки по чеку: " + check.DiscountAmount.ToString("C", _russianCulture));
 
             }
             else
@@ -361,10 +433,10 @@ namespace NexusPoint.Windows
                 sb.AppendLine("Скидки к данному чеку не применялись.");
             }
 
-
-            MessageBox.Show(sb.ToString(), "Имитация печати скидок", MessageBoxButton.OK, MessageBoxImage.Information);
+            PrinterService.Print($"Скидки к чеку №{check.CheckNumber}", sb.ToString());
             ShowError("Расшифровка скидок 'отправлена на печать'.", isInfo: true);
         }
+
 
 
         // Очистка и сообщения

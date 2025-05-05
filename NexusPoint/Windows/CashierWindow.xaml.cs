@@ -535,7 +535,7 @@ namespace NexusPoint.Windows
 
         // --- Обработчики Кнопок и Меню ---
 
-        private void PaymentButton_Click(object sender, RoutedEventArgs e)
+        private async void PaymentButton_Click(object sender, RoutedEventArgs e)
         {
             if (!CurrentCheckItems.Any())
             {
@@ -546,6 +546,53 @@ namespace NexusPoint.Windows
             {
                 ShowTemporaryStatusMessage("Ошибка: Смена не открыта!", isError: true);
                 return;
+            }
+
+            // --- ПРИМЕНЯЕМ ВСЕ АВТОМАТИЧЕСКИЕ СКИДКИ ---
+            try
+            {
+                // Создаем список базовых CheckItem
+                List<CheckItem> itemsForDiscountCalc = CurrentCheckItems
+                   .Select(civ => new CheckItem
+                   { // Создаем новые CheckItem, копируя данные
+                       ProductId = civ.ProductId,
+                       Quantity = civ.Quantity,
+                       PriceAtSale = civ.PriceAtSale,
+                       // Изначально скидка 0, ItemTotal = Quantity * PriceAtSale
+                       DiscountAmount = 0,
+                       ItemTotalAmount = civ.Quantity * civ.PriceAtSale
+                       // OriginalItem не нужен калькулятору
+                   }).ToList();
+
+                // Вызываем основной метод калькулятора
+                decimal totalAutoDiscount = DiscountCalculator.ApplyAllAutoDiscounts(itemsForDiscountCalc);
+
+                // Обновляем CurrentCheckItems на основе результатов
+                bool discountsChanged = false;
+                for (int i = 0; i < CurrentCheckItems.Count; i++)
+                {
+                    // Сравниваем ДО и ПОСЛЕ расчета
+                    if (CurrentCheckItems[i].DiscountAmount != itemsForDiscountCalc[i].DiscountAmount ||
+                        CurrentCheckItems[i].AppliedDiscountId != itemsForDiscountCalc[i].AppliedDiscountId)
+                    {
+                        // ПРИМЕНЯЕМ изменения к объектам CheckItemView
+                        CurrentCheckItems[i].DiscountAmount = itemsForDiscountCalc[i].DiscountAmount;
+                        CurrentCheckItems[i].AppliedDiscountId = itemsForDiscountCalc[i].AppliedDiscountId;
+                        // ItemTotalAmount в CheckItemView пересчитается сам через INotifyPropertyChanged
+                        discountsChanged = true;
+                    }
+                }
+
+                if (discountsChanged)
+                {
+                    UpdateTotals(); // Обновляем общие итоги
+                    ShowTemporaryStatusMessage($"Применены авто-скидки: {totalAutoDiscount:C}", isInfo: true);
+                    await Task.Delay(1000); // Даем увидеть
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка применения скидок:\n{ex.Message}", "Ошибка скидок", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
 
             // 1. Создаем и показываем диалог оплаты
@@ -573,7 +620,15 @@ namespace NexusPoint.Windows
                     DiscountAmount = _totalDiscount,
                     IsReturn = false, // Это продажа
                     OriginalCheckId = null,
-                    Items = CurrentCheckItems.Select(civ => (CheckItem)civ).ToList() // Преобразуем CheckItemView в CheckItem для сохранения
+                    Items = CurrentCheckItems.Select(civ => new CheckItem
+                    { // Копируем финальные данные
+                        ProductId = civ.ProductId,
+                        Quantity = civ.Quantity,
+                        PriceAtSale = civ.PriceAtSale,
+                        DiscountAmount = civ.DiscountAmount,
+                        AppliedDiscountId = civ.AppliedDiscountId,
+                        ItemTotalAmount = civ.CalculatedItemTotalAmount // Берем итоговую сумму
+                    }).ToList()
                 };
 
                 try

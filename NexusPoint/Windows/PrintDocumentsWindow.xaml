@@ -34,9 +34,11 @@
         <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
             <StackPanel Orientation="Horizontal">
                 <Label Content="Номер чека:" VerticalAlignment="Center"/>
-                <TextBox x:Name="CheckNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <TextBox x:Name="CheckNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"
+                         KeyDown="SearchTextBox_KeyDown"/>
                 <Label Content="Номер смены:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"
+                         KeyDown="SearchTextBox_KeyDown"/>
                 <Button x:Name="FindCheckButton" Content="Найти чек" Width="100" Margin="15,0,5,0" Click="FindCheckButton_Click"/>
                 <Button x:Name="PrintLastCheckCopyButton" Content="Копия последнего" Width="120" Margin="0,0,0,0" Click="PrintLastCheckCopyButton_Click"/>
             </StackPanel>
@@ -54,7 +56,9 @@
                         <GridViewColumn Header="Тип" DisplayMemberBinding="{Binding IsReturn, Converter={StaticResource BooleanToSaleReturnConverter}}" Width="80"/>
                         <!-- Потребует конвертер -->
                         <GridViewColumn Header="Дата и время" DisplayMemberBinding="{Binding Timestamp, StringFormat='g'}" Width="130"/>
-                        <GridViewColumn Header="Сумма" DisplayMemberBinding="{Binding TotalAmount, StringFormat=C}" Width="100"/>
+                        <GridViewColumn Header="Сумма"
+                                        DisplayMemberBinding="{Binding TotalAmount, StringFormat=C, ConverterCulture='ru-RU'}"
+                                        Width="100"/>
                         <GridViewColumn Header="Кассир" DisplayMemberBinding="{Binding Cashier.FullName}"/>
                         <!-- Потребует загрузки кассира -->
                     </GridView>

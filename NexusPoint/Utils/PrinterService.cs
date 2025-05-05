@@ -27,8 +27,7 @@ namespace NexusPoint.Utils
             // или формирование ESC/POS команд.
             MessageBox.Show(content, title, MessageBoxButton.OK, MessageBoxImage.Information);
 
-            // 3. Опционально: Запись в файл лога (раскомментировать при необходимости)
-            /*
+            // 3. Опционально: Запись в файл лога 
             try
             {
                 string logFilePath = System.IO.Path.Combine(
@@ -48,7 +47,6 @@ namespace NexusPoint.Utils
                 Debug.WriteLine($"Error writing to receipt log: {ex.Message}");
                 // Не показываем MessageBox об ошибке лога, чтобы не мешать пользователю
             }
-            */
         }
 
         // Можно добавить другие методы, например, для открытия денежного ящика (если он подключен к принтеру)

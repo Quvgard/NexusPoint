@@ -15,13 +15,15 @@ namespace NexusPoint.BusinessLogic
         private static readonly DiscountRepository _discountRepository = new DiscountRepository();
         private static readonly ProductRepository _productRepository = new ProductRepository(); // Может понадобиться для акций с подарком
 
+        // --- Основной метод, вызываемый извне ---
         /// <summary>
-        /// Применяет автоматические скидки к списку позиций чека.
-        /// Модифицирует свойство DiscountAmount у элементов списка.
+        /// Применяет все применимые автоматические скидки к чеку.
+        /// Сначала применяет скидки на позиции, затем скидки на весь чек.
+        /// Модифицирует DiscountAmount и AppliedDiscountId позиций.
         /// </summary>
-        /// <param name="checkItems">Список позиций чека (CheckItem или CheckItemView).</param>
-        /// <returns>Общая сумма примененных автоматических скидок.</returns>
-        public static decimal ApplyAutoDiscounts(IList<CheckItem> checkItems) // Работаем с базовым CheckItem
+        /// <param name="checkItems">Список позиций чека (базовые CheckItem).</param>
+        /// <returns>Общая сумма ВСЕХ примененных скидок.</returns>
+        public static decimal ApplyAllAutoDiscounts(IList<CheckItem> checkItems) // Работаем с базовым CheckItem
         {
             if (checkItems == null || !checkItems.Any())
             {
@@ -48,6 +50,7 @@ namespace NexusPoint.BusinessLogic
             foreach (var item in checkItems)
             {
                 item.DiscountAmount = 0m;
+                item.AppliedDiscountId = null;
             }
 
             // Логика применения скидок (упрощенная):
@@ -57,46 +60,196 @@ namespace NexusPoint.BusinessLogic
             // 4. Важно: решить, может ли на одну позицию применяться несколько скидок.
             //    Пока реализуем: ОДНА самая выгодная скидка на позицию.
 
+            // 1. Сброс предыдущих скидок
             foreach (var item in checkItems)
             {
-                decimal bestDiscountForItem = 0m;
-                Discount appliedDiscountInfo = null; // Какая скидка была применена
-
-                // Ищем скидки, применимые к ЭТОМУ товару
-                var applicableDiscounts = activeDiscounts
-                    .Where(d => d.RequiredProductId == item.ProductId || d.RequiredProductId == null) // Скидки на этот товар или общие
-                    .OrderByDescending(d => CalculatePotentialDiscount(item, d)); // Сортируем по убыванию выгоды
-
-                // Применяем первую (самую выгодную) найденную скидку
-                var bestDiscount = applicableDiscounts.FirstOrDefault();
-
-                if (bestDiscount != null)
-                {
-                    bestDiscountForItem = CalculatePotentialDiscount(item, bestDiscount);
-                    appliedDiscountInfo = bestDiscount; // Запоминаем примененную скидку
-                }
-
-
-                // Применяем лучшую найденную скидку к позиции
-                if (bestDiscountForItem > 0)
-                {
-                    // Округляем скидку до копеек
-                    item.DiscountAmount = Math.Round(bestDiscountForItem, 2);
-                    totalDiscountApplied += item.DiscountAmount;
-
-                    // TODO: Сохранить информацию о примененной скидке (appliedDiscountInfo.DiscountId),
-                    // если это нужно для печати расшифровки (потребует доработки модели CheckItem).
-                    System.Diagnostics.Debug.WriteLine($"Applied discount '{appliedDiscountInfo?.Name}' ({item.DiscountAmount:C}) to item '{item.ProductId}'");
-                }
-
-                // TODO: Обработка акций с подарками (Type='Gift')
-                // Если сработала акция с подарком, нужно будет добавить позицию с подарком в чек (возможно, с ценой 0)
-                // Это лучше делать не здесь, а в SaleManager или CashierWindow после вызова ApplyAutoDiscounts.
+                item.DiscountAmount = 0m;
+                item.AppliedDiscountId = null;
+                // Пересчитываем ItemTotalAmount НАЧАЛЬНЫЙ (без скидок)
+                item.ItemTotalAmount = Math.Round(item.Quantity * item.PriceAtSale, 2);
             }
 
+            // 2. Применение скидок УРОВНЯ ПОЗИЦИИ
+            ApplyLineItemDiscounts(checkItems, activeDiscounts);
 
-            return totalDiscountApplied;
+            // 3. Применение скидок УРОВНЯ ЧЕКА
+            ApplyCheckLevelDiscounts(checkItems, activeDiscounts);
+
+            // 4. Финальный пересчет ItemTotalAmount и расчет общей скидки
+            decimal totalDiscount = 0m;
+            foreach (var item in checkItems)
+            {
+                // Убедимся, что скидка не больше суммы позиции
+                item.DiscountAmount = Math.Max(0, Math.Min(item.Quantity * item.PriceAtSale, item.DiscountAmount));
+                item.ItemTotalAmount = Math.Round(item.Quantity * item.PriceAtSale - item.DiscountAmount, 2);
+                totalDiscount += item.DiscountAmount;
+            }
+
+            // Логика для N+M, N-ный, Подарок - пока не здесь
+
+            return Math.Round(totalDiscount, 2);
         }
+
+
+        // --- Применение скидок на уровне позиции ---
+        private static void ApplyLineItemDiscounts(IList<CheckItem> checkItems, List<Discount> activeDiscounts)
+        {
+            // Фильтруем скидки, которые могут применяться к позициям
+            var lineItemDiscountTypes = new[] { "Процент", "Сумма", "Фикс. цена" };
+            var lineDiscounts = activeDiscounts.Where(d => lineItemDiscountTypes.Contains(d.Type)).ToList();
+            if (!lineDiscounts.Any()) return;
+
+
+            foreach (var item in checkItems)
+            {
+                Discount bestDiscountInfo = null;
+                decimal bestDiscountAmount = 0m;
+
+                // Ищем лучшую скидку для этой позиции
+                var applicableDiscounts = lineDiscounts
+                    .Where(d => d.RequiredProductId == item.ProductId || d.RequiredProductId == null) // На товар или общая
+                    .ToList(); // Материализуем для расчета
+
+                foreach (var discount in applicableDiscounts)
+                {
+                    decimal potentialDiscount = CalculateLineItemDiscountAmount(item, discount);
+                    // Применяем самую выгодную (наибольшую сумму скидки)
+                    if (potentialDiscount > bestDiscountAmount)
+                    {
+                        bestDiscountAmount = potentialDiscount;
+                        bestDiscountInfo = discount;
+                    }
+                }
+
+                // Применяем лучшую найденную скидку
+                if (bestDiscountInfo != null && bestDiscountAmount > 0)
+                {
+                    // ВАЖНО: Пока просто ПРИБАВЛЯЕМ скидку. Логика совмещения скидок может быть сложнее.
+                    // Сейчас, если сработает скидка на чек, она добавится к этой.
+                    item.DiscountAmount += Math.Round(bestDiscountAmount, 2);
+                    // Записываем ID последней примененной скидки на позицию
+                    // Если нужно хранить ВСЕ - нужна другая структура
+                    item.AppliedDiscountId = bestDiscountInfo.DiscountId;
+                }
+            }
+        }
+
+        // Расчет суммы скидки для ТИПОВ, действующих на позицию
+        private static decimal CalculateLineItemDiscountAmount(CheckItem item, Discount discount)
+        {
+            decimal itemSubTotal = item.Quantity * item.PriceAtSale;
+            decimal discountAmount = 0m;
+
+            switch (discount.Type)
+            {
+                case "Процент":
+                    if (discount.Value.HasValue && discount.Value.Value > 0)
+                        discountAmount = itemSubTotal * (discount.Value.Value / 100m);
+                    break;
+                case "Сумма":
+                    if (discount.Value.HasValue && discount.Value.Value > 0)
+                        discountAmount = Math.Min(itemSubTotal, discount.Value.Value); // Скидка на всю позицию
+                    break;
+                case "Фикс. цена":
+                    if (discount.Value.HasValue && discount.Value.Value >= 0)
+                    {
+                        decimal fixedPriceTotal = item.Quantity * discount.Value.Value;
+                        if (fixedPriceTotal < itemSubTotal)
+                            discountAmount = itemSubTotal - fixedPriceTotal;
+                    }
+                    break;
+            }
+            return Math.Max(0, discountAmount); // Не меньше нуля
+        }
+
+
+        // --- Применение скидок на уровне чека ---
+        private static void ApplyCheckLevelDiscounts(IList<CheckItem> checkItems, List<Discount> activeDiscounts)
+        {
+            var checkDiscountRules = activeDiscounts.Where(d => d.Type == "Скидка на сумму чека").ToList();
+            if (!checkDiscountRules.Any()) return;
+
+            // Считаем сумму чека ДО скидок на чек, но ПОСЛЕ скидок на позиции
+            decimal currentCheckTotal = checkItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount);
+            if (currentCheckTotal <= 0) return; // Нет смысла применять к нулевой сумме
+
+            Discount bestCheckDiscountInfo = null;
+            decimal bestCheckDiscountAmount = 0m;
+
+            // Ищем лучшую скидку НА ЧЕК
+            foreach (var discount in checkDiscountRules)
+            {
+                // Проверяем порог суммы
+                if (discount.CheckAmountThreshold.HasValue && currentCheckTotal >= discount.CheckAmountThreshold.Value)
+                {
+                    decimal potentialDiscount = 0m;
+                    if (discount.Value.HasValue && discount.Value.Value > 0)
+                    {
+                        if (discount.IsCheckDiscountPercentage) // Процент от ТЕКУЩЕЙ суммы чека
+                        {
+                            potentialDiscount = currentCheckTotal * (discount.Value.Value / 100m);
+                        }
+                        else // Фиксированная сумма
+                        {
+                            potentialDiscount = Math.Min(currentCheckTotal, discount.Value.Value);
+                        }
+                    }
+
+                    // Выбираем самую выгодную скидку на чек
+                    if (potentialDiscount > bestCheckDiscountAmount)
+                    {
+                        bestCheckDiscountAmount = potentialDiscount;
+                        bestCheckDiscountInfo = discount;
+                    }
+                }
+            }
+            // Если нашли подходящую скидку на чек, распределяем ее по позициям
+            if (bestCheckDiscountInfo != null && bestCheckDiscountAmount > 0)
+            {
+                decimal totalCheckAmountBeforeCheckDiscount = checkItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount); // Сумма до скидки на чек
+                if (totalCheckAmountBeforeCheckDiscount <= 0) return; // Защита
+
+                decimal totalCheckDiscountToApply = Math.Round(bestCheckDiscountAmount, 2);
+                decimal appliedSum = 0m;
+
+                // Распределяем пропорционально СУММЕ ПОЗИЦИИ (уже с учетом скидок на позицию)
+                for (int i = 0; i < checkItems.Count; i++)
+                {
+                    var item = checkItems[i];
+                    // Пересчитываем сумму позиции перед расчетом доли
+                    decimal currentItemTotal = item.Quantity * item.PriceAtSale - item.DiscountAmount;
+                    if (currentItemTotal <= 0) continue; // Не распределяем на нулевые/отрицательные позиции
+
+                    decimal itemShare = (currentItemTotal / totalCheckAmountBeforeCheckDiscount); // Доля в сумме до скидки на чек
+                    decimal discountPortion = 0m;
+
+                    if (i == checkItems.Count - 1) // Последняя позиция забирает остаток
+                    {
+                        discountPortion = totalCheckDiscountToApply - appliedSum;
+                    }
+                    else
+                    {
+                        discountPortion = Math.Round(totalCheckDiscountToApply * itemShare, 2);
+                    }
+
+                    // Добавляем скидку к существующей, но не больше остатка суммы
+                    decimal maxPossibleDiscount = currentItemTotal; // Максимум - вся текущая сумма позиции
+                    decimal discountToAdd = Math.Max(0, Math.Min(maxPossibleDiscount, discountPortion));
+
+                    item.DiscountAmount += discountToAdd;
+                    // ID скидки перезаписываем на скидку чека? Или хранить несколько?
+                    // Пока перезаписываем на ID скидки чека, если она применилась.
+                    if (discountToAdd > 0)
+                    {
+                        item.AppliedDiscountId = bestCheckDiscountInfo.DiscountId;
+                    }
+                    appliedSum += discountToAdd;
+                }
+
+                // TODO: Обработка разницы из-за округления (как в ApplyManualCheckDiscount)
+            }
+        }
+
 
         /// <summary>
         /// Рассчитывает ПОТЕНЦИАЛЬНУЮ сумму скидки для одной позиции по правилу скидки.

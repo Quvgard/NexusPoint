@@ -15,6 +15,7 @@ namespace NexusPoint.Models
         public decimal PriceAtSale { get; set; }
         public decimal ItemTotalAmount { get; set; }
         public decimal DiscountAmount { get; set; }
+        public int? AppliedDiscountId { get; set; }
 
         // Навигационное свойство (опционально)
         // public Product Product { get; set; }
