@@ -23,130 +23,138 @@ namespace NexusPoint.Data
 
                     // --- Таблица Пользователей ---
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS Users (
-                    UserId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Username TEXT NOT NULL UNIQUE,
-                    HashedPassword TEXT NOT NULL,
-                    FullName TEXT NOT NULL,
-                    Role TEXT NOT NULL CHECK(Role IN ('Cashier', 'Manager', 'Admin'))
-                );");
+                    CREATE TABLE IF NOT EXISTS Users (
+                        UserId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Username TEXT NOT NULL UNIQUE,
+                        HashedPassword TEXT NOT NULL,
+                        FullName TEXT NOT NULL,
+                        Role TEXT NOT NULL CHECK(Role IN ('Cashier', 'Manager', 'Admin'))
+                    );");
                     System.Diagnostics.Debug.WriteLine("Users table checked/created.");
 
                     // --- Таблица Товаров (Каталог) ---
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS Products (
-                    ProductId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Barcode TEXT UNIQUE,
-                    ProductCode TEXT NOT NULL UNIQUE,
-                    Name TEXT NOT NULL,
-                    Price REAL NOT NULL,
-                    IsMarked INTEGER NOT NULL DEFAULT 0
-                );");
+                    CREATE TABLE IF NOT EXISTS Products (
+                        ProductId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Barcode TEXT UNIQUE,
+                        ProductCode TEXT NOT NULL UNIQUE,
+                        Name TEXT NOT NULL,
+                        Description TEXT NULL,   
+                        Price REAL NOT NULL
+                    );");
                     System.Diagnostics.Debug.WriteLine("Products (Catalog) table checked/created.");
 
                     // --- Таблица Остатков Товаров ---
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS StockItems (
-                    StockItemId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ProductId INTEGER NOT NULL UNIQUE,      -- Один товар - одна запись остатка
-                    Quantity REAL NOT NULL DEFAULT 0,       -- Используем REAL для гибкости
-                    LastUpdated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (ProductId) REFERENCES Products(ProductId) ON DELETE CASCADE
-                );");
+                    CREATE TABLE IF NOT EXISTS StockItems (
+                        StockItemId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ProductId INTEGER NOT NULL UNIQUE,      -- Один товар - одна запись остатка
+                        Quantity REAL NOT NULL DEFAULT 0,       -- Используем REAL для гибкости
+                        LastUpdated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (ProductId) REFERENCES Products(ProductId) ON DELETE CASCADE
+                    );");
                     System.Diagnostics.Debug.WriteLine("StockItems table checked/created.");
 
                     // --- Таблица Смен ---
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS Shifts (
-                    ShiftId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ShiftNumber INTEGER NOT NULL,           -- Подумать над уникальностью (напр., в рамках дня/кассы)
-                    OpenTimestamp DATETIME NOT NULL,
-                    CloseTimestamp DATETIME NULL,
-                    OpeningUserId INTEGER NOT NULL,
-                    ClosingUserId INTEGER NULL,
-                    StartCash REAL NOT NULL DEFAULT 0,
-                    TotalSales REAL NULL,
-                    TotalReturns REAL NULL,
-                    CashSales REAL NULL,
-                    CardSales REAL NULL,
-                    CashAdded REAL NULL,
-                    CashRemoved REAL NULL,
-                    EndCashTheoretic REAL NULL,
-                    EndCashActual REAL NULL,
-                    Difference REAL NULL,
-                    IsClosed INTEGER NOT NULL DEFAULT 0,
-                    FOREIGN KEY (OpeningUserId) REFERENCES Users(UserId),
-                    FOREIGN KEY (ClosingUserId) REFERENCES Users(UserId)
-                );");
+                    CREATE TABLE IF NOT EXISTS Shifts (
+                        ShiftId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ShiftNumber INTEGER NOT NULL,           -- Подумать над уникальностью (напр., в рамках дня/кассы)
+                        OpenTimestamp DATETIME NOT NULL,
+                        CloseTimestamp DATETIME NULL,
+                        OpeningUserId INTEGER NOT NULL,
+                        ClosingUserId INTEGER NULL,
+                        StartCash REAL NOT NULL DEFAULT 0,
+                        TotalSales REAL NULL,
+                        TotalReturns REAL NULL,
+                        CashSales REAL NULL,
+                        CardSales REAL NULL,
+                        CashAdded REAL NULL,
+                        CashRemoved REAL NULL,
+                        EndCashTheoretic REAL NULL,
+                        EndCashActual REAL NULL,
+                        Difference REAL NULL,
+                        IsClosed INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (OpeningUserId) REFERENCES Users(UserId),
+                        FOREIGN KEY (ClosingUserId) REFERENCES Users(UserId)
+                    );");
                     System.Diagnostics.Debug.WriteLine("Shifts table checked/created.");
 
                     // --- Таблица Операций с Денежным Ящиком ---
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS CashDrawerOperations (
-                    OperationId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ShiftId INTEGER NOT NULL,
-                    UserId INTEGER NOT NULL,
-                    Timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    OperationType TEXT NOT NULL CHECK(OperationType IN ('CashIn', 'CashOut')),
-                    Amount REAL NOT NULL,
-                    Reason TEXT NULL,
-                    FOREIGN KEY (ShiftId) REFERENCES Shifts(ShiftId),
-                    FOREIGN KEY (UserId) REFERENCES Users(UserId)
-                );");
+                    CREATE TABLE IF NOT EXISTS CashDrawerOperations (
+                        OperationId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ShiftId INTEGER NOT NULL,
+                        UserId INTEGER NOT NULL,
+                        Timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        OperationType TEXT NOT NULL CHECK(OperationType IN ('CashIn', 'CashOut')),
+                        Amount REAL NOT NULL,
+                        Reason TEXT NULL,
+                        FOREIGN KEY (ShiftId) REFERENCES Shifts(ShiftId),
+                        FOREIGN KEY (UserId) REFERENCES Users(UserId)
+                    );");
                     System.Diagnostics.Debug.WriteLine("CashDrawerOperations table checked/created.");
 
                     // --- Таблица Чеков --- (С добавленной ShiftId)
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS Checks (
-                    CheckId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ShiftId INTEGER NOT NULL,               -- <<--- Связь со сменой
-                    CheckNumber INTEGER NOT NULL,           -- Номер чека в смене? Или глобальный?
-                    Timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    UserId INTEGER NOT NULL,
-                    TotalAmount REAL NOT NULL,
-                    PaymentType TEXT NOT NULL CHECK(PaymentType IN ('Cash', 'Card', 'Mixed')),
-                    CashPaid REAL DEFAULT 0,
-                    CardPaid REAL DEFAULT 0,
-                    DiscountAmount REAL DEFAULT 0,
-                    IsReturn INTEGER NOT NULL DEFAULT 0,
-                    OriginalCheckId INTEGER NULL,
-                    FOREIGN KEY (UserId) REFERENCES Users(UserId),
-                    FOREIGN KEY (ShiftId) REFERENCES Shifts(ShiftId) -- <<--- Связь со сменой
-                );");
+                    CREATE TABLE IF NOT EXISTS Checks (
+                        CheckId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ShiftId INTEGER NOT NULL,               -- <<--- Связь со сменой
+                        CheckNumber INTEGER NOT NULL,           -- Номер чека в смене? Или глобальный?
+                        Timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        UserId INTEGER NOT NULL,
+                        TotalAmount REAL NOT NULL,
+                        PaymentType TEXT NOT NULL CHECK(PaymentType IN ('Cash', 'Card', 'Mixed')),
+                        CashPaid REAL DEFAULT 0,
+                        CardPaid REAL DEFAULT 0,
+                        DiscountAmount REAL DEFAULT 0,
+                        IsReturn INTEGER NOT NULL DEFAULT 0,
+                        OriginalCheckId INTEGER NULL,
+                        FOREIGN KEY (UserId) REFERENCES Users(UserId),
+                        FOREIGN KEY (ShiftId) REFERENCES Shifts(ShiftId) -- <<--- Связь со сменой
+                    );");
                     System.Diagnostics.Debug.WriteLine("Checks table checked/created.");
 
                     // --- Таблица Позиций Чека --- (Без изменений структуры)
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS CheckItems (
-                    CheckItemId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    CheckId INTEGER NOT NULL,
-                    ProductId INTEGER NOT NULL,
-                    Quantity REAL NOT NULL,
-                    PriceAtSale REAL NOT NULL,
-                    ItemTotalAmount REAL NOT NULL,
-                    DiscountAmount REAL DEFAULT 0,
-                    MarkingCode TEXT NULL,
-                    FOREIGN KEY (CheckId) REFERENCES Checks(CheckId) ON DELETE CASCADE,
-                    FOREIGN KEY (ProductId) REFERENCES Products(ProductId)
-                );");
+                    CREATE TABLE IF NOT EXISTS CheckItems (
+                        CheckItemId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        CheckId INTEGER NOT NULL,
+                        ProductId INTEGER NOT NULL,
+                        Quantity REAL NOT NULL,
+                        PriceAtSale REAL NOT NULL,
+                        ItemTotalAmount REAL NOT NULL,
+                        DiscountAmount REAL DEFAULT 0,
+                        AppliedDiscountId INTEGER NULL, 
+                        FOREIGN KEY (CheckId) REFERENCES Checks(CheckId) ON DELETE CASCADE,
+                        FOREIGN KEY (ProductId) REFERENCES Products(ProductId),
+                        FOREIGN KEY (AppliedDiscountId) REFERENCES Discounts(DiscountId) ON DELETE SET NULL 
+                    );");
                     System.Diagnostics.Debug.WriteLine("CheckItems table checked/created.");
 
-                    // --- Таблица Акций/Скидок --- (Пример)
+                    // --- Таблица Акций/Скидок --- 
                     connection.Execute(@"
-                CREATE TABLE IF NOT EXISTS Discounts (
-                    DiscountId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Name TEXT NOT NULL,
-                    Type TEXT NOT NULL CHECK(Type IN ('Percentage', 'FixedAmount', 'Gift')),
-                    Value REAL NULL,
-                    RequiredProductId INTEGER NULL,
-                    GiftProductId INTEGER NULL,
-                    StartDate DATETIME NULL,
-                    EndDate DATETIME NULL,
-                    IsActive INTEGER NOT NULL DEFAULT 1,
-                    FOREIGN KEY (RequiredProductId) REFERENCES Products(ProductId),
-                    FOREIGN KEY (GiftProductId) REFERENCES Products(ProductId)
-                );");
-                    System.Diagnostics.Debug.WriteLine("Discounts table checked/created.");
+                    CREATE TABLE Discounts (
+                        DiscountId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Name TEXT NOT NULL,
+                        Type TEXT NOT NULL CHECK(Type IN ('Процент', 'Сумма', 'Подарок', 'Фикс. цена', 'N+M Подарок', 'Скидка на N-ный', 'Скидка на сумму чека')),
+                        Description TEXT NULL, 
+                        IsActive INTEGER NOT NULL DEFAULT 1,
+                        StartDate DATETIME NULL,
+                        EndDate DATETIME NULL,
+                        Value REAL NULL,                    -- Для % / Сумма / Фикс.цена / СкидкаНаN(сумма) / СкидкаНаЧек(сумма)
+                        RequiredProductId INTEGER NULL,     -- FK к Products
+                        GiftProductId INTEGER NULL,         -- FK к Products
+                        RequiredQuantityN INTEGER NULL,     -- Для N+M
+                        GiftQuantityM INTEGER NULL,         -- Для N+M
+                        NthItemNumber INTEGER NULL,         -- Для СкидкаНаN
+                        IsNthDiscountPercentage INTEGER NOT NULL DEFAULT 0, -- Для СкидкаНаN (0=сумма, 1=процент)
+                        CheckAmountThreshold REAL NULL,     -- Для СкидкаНаЧек
+                        IsCheckDiscountPercentage INTEGER NOT NULL DEFAULT 0, -- Для СкидкаНаЧек (0=сумма, 1=процент)
+                        FOREIGN KEY (RequiredProductId) REFERENCES Products(ProductId) ON DELETE SET NULL, -- При удалении товара сбрасываем ссылку
+                        FOREIGN KEY (GiftProductId) REFERENCES Products(ProductId) ON DELETE SET NULL
+                    );");
+                    System.Diagnostics.Debug.WriteLine("Discounts table re-created.");
 
                     // Здесь можно добавить создание начальных данных, если нужно
                     // Например, пользователя Admin

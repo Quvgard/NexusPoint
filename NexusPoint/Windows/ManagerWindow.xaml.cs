@@ -1,4 +1,5 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
@@ -16,402 +17,282 @@ using System.Windows.Shapes;
 
 namespace NexusPoint.Windows
 {
-    /// <summary>
-    /// Логика взаимодействия для ManagerWindow.xaml
-    /// </summary>
     public partial class ManagerWindow : Window
     {
-        private readonly User CurrentUser; // Текущий вошедший пользователь
-        private readonly ProductRepository _productRepository;
-        private readonly StockItemRepository _stockItemRepository;
-        private readonly UserRepository _userRepository;
-        private readonly DiscountRepository _discountRepository;
+        private readonly User CurrentUser;
 
-        // Временное хранилище для полных данных остатков (для отображения названий)
-        // Лучше создать ViewModel или использовать JOIN в репозитории
-        private class StockItemView
-        {
-            public int StockItemId { get; set; }
-            public int ProductId { get; set; }
-            public string ProductName { get; set; } = "Загрузка..."; // Имя товара
-            public decimal Quantity { get; set; }
-            public DateTime LastUpdated { get; set; }
-        }
-        private List<StockItemView> currentStockView = new List<StockItemView>();
+        // --- Business Logic Managers ---
+        private readonly ProductManager _productManager;
+        private readonly StockManager _stockManager;
+        private readonly UserManager _userManager;
+        private readonly DiscountManager _discountManager;
 
-
+        // --- Конструктор ---
         public ManagerWindow(User user)
         {
             InitializeComponent();
-            CurrentUser = user;
-            _productRepository = new ProductRepository();
-            _stockItemRepository = new StockItemRepository();
-            _userRepository = new UserRepository();
-            _discountRepository = new DiscountRepository();
+            CurrentUser = user ?? throw new ArgumentNullException(nameof(user));
 
-            // Отображаем информацию о пользователе в статусной строке
+            // Инициализация репозиториев
+            var productRepository = new ProductRepository();
+            var stockItemRepository = new StockItemRepository();
+            var userRepository = new UserRepository();
+            var discountRepository = new DiscountRepository();
+
+            // Инициализация менеджеров
+            _productManager = new ProductManager(productRepository);
+            _stockManager = new StockManager(stockItemRepository, productRepository); // Передаем оба репо
+            _userManager = new UserManager(userRepository);
+            _discountManager = new DiscountManager(discountRepository);
+
+
             UserInfoStatusBarText.Text = $"Пользователь: {CurrentUser.FullName} ({CurrentUser.Role})";
         }
 
-        // Загрузка данных при открытии окна
-        private void Window_Loaded(object sender, RoutedEventArgs e)
+        // --- Загрузка окна ---
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            LoadProducts();
-            LoadStockItems(); // Используем новый метод
-            LoadUsers();
-            LoadDiscounts();
+            // Используем Task.WhenAll для параллельной загрузки
+            await Task.WhenAll(
+                LoadProductsAsync(),
+                LoadStockItemsAsync(),
+                LoadUsersAsync(),
+                LoadDiscountsAsync()
+            );
         }
 
-        // --- Методы загрузки данных ---
-
-        private void LoadProducts(string searchTerm = null)
+        // --- Выход ---
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
         {
-            try
+            MessageBoxResult result = MessageBox.Show("Вы уверены, что хотите выйти из системы?", "Выход", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result == MessageBoxResult.Yes)
             {
-                IEnumerable<Product> products;
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    products = _productRepository.GetAllProducts();
-                }
-                else
-                {
-                    products = _productRepository.SearchProductsByName(searchTerm);
-                }
-                ProductsDataGrid.ItemsSource = products;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка загрузки списка товаров: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MainWindow mainWindow = new MainWindow();
+                mainWindow.Show();
+                this.Close();
             }
         }
 
-        // Обновленный метод загрузки остатков с именами товаров
-        private async void LoadStockItems(string searchTerm = null)
+        // --- Методы загрузки данных (асинхронные) ---
+        private async Task LoadProductsAsync(string searchTerm = null)
         {
-            try
-            {
-                // 1. Получаем все StockItems
-                var stockItems = _stockItemRepository.GetAllStockItems(); // Добавьте этот метод в StockItemRepository
-
-                // Фильтрация по ProductId если есть searchTerm (допустим, ищем по ID товара)
-                if (!string.IsNullOrWhiteSpace(searchTerm) && int.TryParse(searchTerm, out int searchProductId))
-                {
-                    stockItems = stockItems.Where(si => si.ProductId == searchProductId);
-                }
-                // TODO: Добавить поиск по названию или коду товара (потребует загрузки Products)
-
-                // 2. Создаем список для отображения
-                currentStockView = new List<StockItemView>();
-                foreach (var si in stockItems)
-                {
-                    currentStockView.Add(new StockItemView
-                    {
-                        StockItemId = si.StockItemId,
-                        ProductId = si.ProductId,
-                        Quantity = si.Quantity,
-                        LastUpdated = si.LastUpdated
-                        // ProductName пока пустой или "Загрузка..."
-                    });
-                }
-
-                StockDataGrid.ItemsSource = null; // Очищаем перед обновлением
-                StockDataGrid.ItemsSource = currentStockView;
-
-                // 3. Асинхронно подгружаем имена товаров (чтобы не блокировать UI)
-                await LoadProductNamesForStockViewAsync();
-
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка загрузки остатков: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            // Используем ProductManager
+            ProductsDataGrid.ItemsSource = await _productManager.GetProductsAsync(searchTerm);
         }
 
-        // Асинхронный метод для подгрузки имен в StockDataGrid
-        private async Task LoadProductNamesForStockViewAsync()
+        private async Task LoadStockItemsAsync(string searchTerm = null)
         {
-            List<int> productIds = currentStockView.Select(si => si.ProductId).Distinct().ToList();
-            if (!productIds.Any()) return;
-
-            // Можно оптимизировать, получая сразу словарь ProductId -> ProductName
-            var products = (await Task.Run(() => _productRepository.GetProductsByIds(productIds))).ToDictionary(p => p.ProductId); // Добавьте GetProductsByIds в ProductRepository
-
-            foreach (var stockViewItem in currentStockView)
-            {
-                if (products.TryGetValue(stockViewItem.ProductId, out Product product))
-                {
-                    stockViewItem.ProductName = product.Name;
-                }
-                else
-                {
-                    stockViewItem.ProductName = "<Товар не найден>";
-                }
-            }
-
-            // Обновляем DataGrid в потоке UI
-            StockDataGrid.ItemsSource = null;
-            StockDataGrid.ItemsSource = currentStockView;
-            // StockDataGrid.Items.Refresh(); // Можно и так, если не менять ItemsSource
+            // Используем StockManager
+            StockDataGrid.ItemsSource = null; // Сбрасываем перед загрузкой
+            StockDataGrid.ItemsSource = await _stockManager.GetStockItemsViewAsync(searchTerm);
+            // Обновление UI произойдет после await
         }
 
-
-        private void LoadUsers()
+        private async Task LoadUsersAsync()
         {
-            try
-            {
-                UsersDataGrid.ItemsSource = _userRepository.GetAllUsers();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка загрузки списка пользователей: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            // Используем UserManager
+            UsersDataGrid.ItemsSource = await _userManager.GetUsersAsync();
         }
 
-        private void LoadDiscounts()
+        private async Task LoadDiscountsAsync()
         {
-            try
-            {
-                DiscountsDataGrid.ItemsSource = _discountRepository.GetAllDiscounts(); // Или GetAllActiveDiscounts() по умолчанию?
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка загрузки списка акций: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            // Используем DiscountManager
+            DiscountsDataGrid.ItemsSource = await _discountManager.GetDiscountsAsync();
         }
+
 
         // --- Обработчики кнопок вкладки "Товары" ---
-
-        private void RefreshProductsButton_Click(object sender, RoutedEventArgs e) => LoadProducts();
-        private void SearchProductButton_Click(object sender, RoutedEventArgs e) => LoadProducts(ProductSearchTextBox.Text);
-        private void ResetProductSearchButton_Click(object sender, RoutedEventArgs e)
+        private async void RefreshProductsButton_Click(object sender, RoutedEventArgs e) => await LoadProductsAsync();
+        private async void SearchProductButton_Click(object sender, RoutedEventArgs e) => await LoadProductsAsync(ProductSearchTextBox.Text);
+        private async void ResetProductSearchButton_Click(object sender, RoutedEventArgs e)
         {
             ProductSearchTextBox.Clear();
-            LoadProducts();
+            await LoadProductsAsync();
         }
 
-        private void AddProductButton_Click(object sender, RoutedEventArgs e)
+        private async void AddProductButton_Click(object sender, RoutedEventArgs e)
         {
-            // Открываем диалоговое окно для добавления товара
-            // var addProductDialog = new AddEditProductWindow(); // Нужно создать это окно
-            // if (addProductDialog.ShowDialog() == true)
-            // {
-            //     LoadProducts(); // Обновляем список, если товар добавлен
-            // }
-            MessageBox.Show("Логика добавления товара (через диалоговое окно) еще не реализована.");
-        }
-
-        private void EditProductButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (ProductsDataGrid.SelectedItem is Product selectedProduct)
+            // Передаем _productManager в конструктор
+            var addProductDialog = new AddEditProductWindow(_productManager) { Owner = this };
+            if (addProductDialog.ShowDialog() == true)
             {
-                // Открываем диалоговое окно для редактирования, передавая товар
-                // var editProductDialog = new AddEditProductWindow(selectedProduct); // Перегруженный конструктор
-                // if (editProductDialog.ShowDialog() == true)
-                // {
-                //     LoadProducts(); // Обновляем список
-                // }
-                MessageBox.Show($"Логика редактирования товара ID: {selectedProduct.ProductId} (через диалоговое окно) еще не реализована.");
-            }
-            else
-            {
-                MessageBox.Show("Пожалуйста, выберите товар для редактирования.", "Выбор товара", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await Task.WhenAll(LoadProductsAsync(), LoadStockItemsAsync());
             }
         }
 
-        private void DeleteProductButton_Click(object sender, RoutedEventArgs e)
+        private async void EditProductButton_Click(object sender, RoutedEventArgs e)
         {
             if (ProductsDataGrid.SelectedItem is Product selectedProduct)
             {
-                var result = MessageBox.Show($"Вы уверены, что хотите удалить товар '{selectedProduct.Name}' (ID: {selectedProduct.ProductId})?\nЭто действие также удалит запись об остатках!",
-                                             "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-
-                if (result == MessageBoxResult.Yes)
+                // Передаем _productManager и редактируемый товар
+                var editProductDialog = new AddEditProductWindow(_productManager, selectedProduct) { Owner = this };
+                if (editProductDialog.ShowDialog() == true)
                 {
-                    try
-                    {
-                        bool deleted = _productRepository.DeleteProduct(selectedProduct.ProductId);
-                        if (deleted)
-                        {
-                            MessageBox.Show("Товар успешно удален.", "Удаление", MessageBoxButton.OK, MessageBoxImage.Information);
-                            LoadProducts(); // Обновляем список товаров
-                            LoadStockItems(); // Обновляем список остатков
-                        }
-                        else
-                        {
-                            MessageBox.Show("Не удалось удалить товар.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Обработка возможных ошибок внешнего ключа, если товар используется в чеках (хотя FK нет)
-                        MessageBox.Show($"Ошибка при удалении товара: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
+                    await Task.WhenAll(LoadProductsAsync(), LoadStockItemsAsync());
                 }
             }
-            else
-            {
-                MessageBox.Show("Пожалуйста, выберите товар для удаления.", "Выбор товара", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            else { MessageBox.Show("Пожалуйста, выберите товар для редактирования.", "Выбор товара", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
+
+        private async void DeleteProductButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (ProductsDataGrid.SelectedItem is Product selectedProduct)
+            {
+                var result = MessageBox.Show($"Вы уверены, что хотите удалить товар '{selectedProduct.Name}' (ID: {selectedProduct.ProductId})?\nЭто действие необратимо и также удалит запись об остатках!",
+                                             "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (result == MessageBoxResult.Yes)
+                {
+                    // Используем ProductManager для удаления
+                    bool deleted = _productManager.DeleteProduct(selectedProduct.ProductId);
+                    if (deleted)
+                    {
+                        MessageBox.Show("Товар успешно удален.", "Удаление", MessageBoxButton.OK, MessageBoxImage.Information);
+                        // Перезагружаем оба списка
+                        await Task.WhenAll(LoadProductsAsync(), LoadStockItemsAsync());
+                    }
+                    // Сообщение об ошибке покажется внутри DeleteProduct
+                }
+            }
+            else { MessageBox.Show("Пожалуйста, выберите товар для удаления.", "Выбор товара", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
 
         // --- Обработчики кнопок вкладки "Остатки" ---
-        private void RefreshStockButton_Click(object sender, RoutedEventArgs e) => LoadStockItems();
-        private void SearchStockButton_Click(object sender, RoutedEventArgs e) => LoadStockItems(StockSearchTextBox.Text);
-        private void ResetStockSearchButton_Click(object sender, RoutedEventArgs e)
+        private async void RefreshStockButton_Click(object sender, RoutedEventArgs e) => await LoadStockItemsAsync();
+        private async void SearchStockButton_Click(object sender, RoutedEventArgs e) => await LoadStockItemsAsync(StockSearchTextBox.Text);
+        private async void ResetStockSearchButton_Click(object sender, RoutedEventArgs e)
         {
             StockSearchTextBox.Clear();
-            LoadStockItems();
+            await LoadStockItemsAsync();
         }
 
-
-        private void AdjustStockButton_Click(object sender, RoutedEventArgs e)
+        private async void AdjustStockButton_Click(object sender, RoutedEventArgs e)
         {
-            // Открываем диалоговое окно для приемки/списания/корректировки
-            // var adjustStockDialog = new AdjustStockWindow(); // Нужно создать это окно
-            // if(adjustStockDialog.ShowDialog() == true)
-            // {
-            //      LoadStockItems(); // Обновляем остатки
-            // }
-            MessageBox.Show("Логика приемки/корректировки остатков (через диалоговое окно) еще не реализована.");
+            // Передаем нужные менеджеры
+            var adjustStockDialog = new AdjustStockWindow(_productManager, _stockManager) { Owner = this };
+            if (adjustStockDialog.ShowDialog() == true)
+            {
+                // Обновляем список остатков ПОСЛЕ успешной корректировки
+                await LoadStockItemsAsync(StockSearchTextBox.Text);
+            }
         }
+
 
         // --- Обработчики кнопок вкладки "Пользователи" ---
-        private void RefreshUsersButton_Click(object sender, RoutedEventArgs e) => LoadUsers();
+        private async void RefreshUsersButton_Click(object sender, RoutedEventArgs e) => await LoadUsersAsync();
 
-        private void AddUserButton_Click(object sender, RoutedEventArgs e)
+       private async void AddUserButton_Click(object sender, RoutedEventArgs e)
+{
+    // Передаем _userManager
+    var addUserDialog = new AddEditUserWindow(_userManager) { Owner = this };
+    if (addUserDialog.ShowDialog() == true)
+    {
+        await LoadUsersAsync(); // Обновляем список
+    }
+}
+
+private async void EditUserButton_Click(object sender, RoutedEventArgs e)
+{
+    if (UsersDataGrid.SelectedItem is User selectedUser)
+    {
+        // Передаем _userManager и пользователя
+        var editUserDialog = new AddEditUserWindow(_userManager, selectedUser) { Owner = this };
+        if (editUserDialog.ShowDialog() == true)
         {
-            // var addUserDialog = new AddEditUserWindow(); // Нужно создать
-            // if(addUserDialog.ShowDialog() == true)
-            // {
-            //      LoadUsers();
-            // }
-            MessageBox.Show("Логика добавления пользователя (через диалоговое окно) еще не реализована.");
+            await LoadUsersAsync(); // Обновляем список
         }
+    }
+    else { MessageBox.Show("Выберите пользователя для редактирования.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning); }
+}
 
-        private void EditUserButton_Click(object sender, RoutedEventArgs e)
+        private async void ResetUserPasswordButton_Click(object sender, RoutedEventArgs e)
         {
             if (UsersDataGrid.SelectedItem is User selectedUser)
             {
-                // var editUserDialog = new AddEditUserWindow(selectedUser); // Передаем пользователя
-                // if(editUserDialog.ShowDialog() == true)
-                // {
-                //      LoadUsers();
-                // }
-                MessageBox.Show($"Логика редактирования пользователя {selectedUser.Username} (через диалоговое окно) еще не реализована.");
-            }
-            else
-            {
-                MessageBox.Show("Выберите пользователя для редактирования.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-
-        private void ResetUserPasswordButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (UsersDataGrid.SelectedItem is User selectedUser)
-            {
-                // Можно открыть простой диалог для ввода нового пароля
-                // или сразу сгенерировать временный
-                var result = MessageBox.Show($"Сбросить пароль для пользователя {selectedUser.Username}?", "Сброс пароля", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (result == MessageBoxResult.Yes)
+                var passwordDialog = new InputDialog($"Сброс пароля для {selectedUser.Username}", "Введите НОВЫЙ пароль:", isPassword: true) { Owner = this };
+                if (passwordDialog.ShowDialog() == true)
                 {
-                    // var newPasswordDialog = new ResetPasswordDialog(); // Нужно создать
-                    // if (newPasswordDialog.ShowDialog() == true)
-                    // {
-                    //     string newPlainPassword = newPasswordDialog.NewPassword;
-                    //     try
-                    //     {
-                    //        if (_userRepository.UpdateUserPassword(selectedUser.UserId, newPlainPassword))
-                    //         {
-                    //            MessageBox.Show("Пароль успешно сброшен.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
-                    //         } else { /*...*/ }
-                    //     } catch (Exception ex) { /*...*/ }
-                    // }
-                    MessageBox.Show($"Логика сброса пароля для {selectedUser.Username} (через диалог) еще не реализована.");
+                    string newPlainPassword = passwordDialog.InputText;
+                    // Используем UserManager для сброса пароля
+                    bool success = _userManager.ResetUserPassword(selectedUser.UserId, newPlainPassword);
+                    if (success)
+                    {
+                        MessageBox.Show("Пароль успешно сброшен.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                        // Список пользователей обновлять не нужно, изменился только хеш пароля
+                    }
+                    // Сообщение об ошибке покажется внутри ResetUserPassword
                 }
             }
-            else
-            {
-                MessageBox.Show("Выберите пользователя для сброса пароля.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            else { MessageBox.Show("Выберите пользователя для сброса пароля.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
-        private void DeleteUserButton_Click(object sender, RoutedEventArgs e)
+        private async void DeleteUserButton_Click(object sender, RoutedEventArgs e)
         {
             if (UsersDataGrid.SelectedItem is User selectedUser)
             {
-                if (selectedUser.UserId == CurrentUser.UserId)
-                {
-                    MessageBox.Show("Нельзя удалить текущего пользователя.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
+                // Проверка удаления текущего пользователя выполняется в менеджере
                 var result = MessageBox.Show($"Удалить пользователя {selectedUser.Username}?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (result == MessageBoxResult.Yes)
                 {
-                    try
+                    // Используем UserManager для удаления
+                    bool deleted = _userManager.DeleteUser(selectedUser.UserId, CurrentUser.UserId);
+                    if (deleted)
                     {
-                        // Подумать про FK в чеках и сменах! Удаление может вызвать ошибку.
-                        // Лучше добавить поле IsActive в Users и деактивировать.
-                        if (_userRepository.DeleteUser(selectedUser.UserId))
-                        {
-                            MessageBox.Show("Пользователь удален.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
-                            LoadUsers();
-                        }
-                        else { /*...*/ }
+                        MessageBox.Show("Пользователь удален.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                        await LoadUsersAsync(); // Обновляем список
                     }
-                    catch (Exception ex) { /*...*/ }
+                    // Сообщение об ошибке покажется внутри DeleteUser
                 }
             }
-            else
-            {
-                MessageBox.Show("Выберите пользователя для удаления.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            else { MessageBox.Show("Выберите пользователя для удаления.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
 
         // --- Обработчики кнопок вкладки "Акции и Скидки" ---
-        private void RefreshDiscountsButton_Click(object sender, RoutedEventArgs e) => LoadDiscounts();
+        private async void RefreshDiscountsButton_Click(object sender, RoutedEventArgs e) => await LoadDiscountsAsync();
 
-        private void AddDiscountButton_Click(object sender, RoutedEventArgs e)
+        private async void AddDiscountButton_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Логика добавления акции (через диалоговое окно) еще не реализована.");
-        }
-
-        private void EditDiscountButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (DiscountsDataGrid.SelectedItem is Discount selectedDiscount)
+            // Передаем менеджеры
+            var addDiscountDialog = new AddEditDiscountWindow(_discountManager, _productManager) { Owner = this };
+            if (addDiscountDialog.ShowDialog() == true)
             {
-                MessageBox.Show($"Логика редактирования акции {selectedDiscount.Name} (через диалоговое окно) еще не реализована.");
-            }
-            else
-            {
-                MessageBox.Show("Выберите акцию для редактирования.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await LoadDiscountsAsync(); // Обновляем список
             }
         }
 
-        private void DeleteDiscountButton_Click(object sender, RoutedEventArgs e)
+        private async void EditDiscountButton_Click(object sender, RoutedEventArgs e)
         {
             if (DiscountsDataGrid.SelectedItem is Discount selectedDiscount)
             {
-                var result = MessageBox.Show($"Удалить акцию {selectedDiscount.Name}?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (result == MessageBoxResult.Yes)
+                // Передаем менеджеры и скидку
+                var editDiscountDialog = new AddEditDiscountWindow(_discountManager, _productManager, selectedDiscount) { Owner = this };
+                if (editDiscountDialog.ShowDialog() == true)
                 {
-                    try
-                    {
-                        if (_discountRepository.DeleteDiscount(selectedDiscount.DiscountId))
-                        {
-                            MessageBox.Show("Акция удалена.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
-                            LoadDiscounts();
-                        }
-                        else { /*...*/ }
-                    }
-                    catch (Exception ex) { /*...*/ }
+                    await LoadDiscountsAsync(); // Обновляем список
                 }
             }
-            else
+            else { MessageBox.Show("Выберите акцию для редактирования.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
+        private async void DeleteDiscountButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (DiscountsDataGrid.SelectedItem is Discount selectedDiscount)
             {
-                MessageBox.Show("Выберите акцию для удаления.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning);
+                var result = MessageBox.Show($"Удалить акцию '{selectedDiscount.Name}'?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (result == MessageBoxResult.Yes)
+                {
+                    // Используем DiscountManager
+                    bool deleted = _discountManager.DeleteDiscount(selectedDiscount.DiscountId);
+                    if (deleted)
+                    {
+                        MessageBox.Show("Акция удалена.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                        await LoadDiscountsAsync(); // Обновляем список
+                    }
+                    // Сообщение об ошибке покажется внутри DeleteDiscount
+                }
             }
+            else { MessageBox.Show("Выберите акцию для удаления.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
     }
 }

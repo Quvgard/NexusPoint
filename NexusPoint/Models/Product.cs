@@ -12,7 +12,7 @@ namespace NexusPoint.Models
         public string Barcode { get; set; }
         public string ProductCode { get; set; }
         public string Name { get; set; }
+        public string Description { get; set; }
         public decimal Price { get; set; } // decimal для денег
-        public bool IsMarked { get; set; }
     }
 }

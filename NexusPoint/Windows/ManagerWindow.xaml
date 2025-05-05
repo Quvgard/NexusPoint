@@ -32,16 +32,16 @@
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
                         <Label Content="Поиск по названию:" VerticalAlignment="Center"/>
                         <TextBox x:Name="ProductSearchTextBox" Width="200" Margin="5,0" VerticalContentAlignment="Center"/>
-                        <Button Content="Найти" Width="80" Margin="5,0" Click="SearchProductButton_Click"/>
-                        <Button Content="Сбросить" Width="80" Click="ResetProductSearchButton_Click"/>
+                        <Button Content="Найти" Width="100" Margin="5,0" Click="SearchProductButton_Click"/>
+                        <Button Content="Сбросить" Width="100" Click="ResetProductSearchButton_Click"/>
                     </StackPanel>
 
                     <!-- Кнопки действий для товаров -->
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,5">
-                        <Button Content="Добавить товар" Width="120" Margin="0,0,5,0" Click="AddProductButton_Click"/>
-                        <Button Content="Редактировать" Width="100" Margin="0,0,5,0" Click="EditProductButton_Click"/>
-                        <Button Content="Удалить" Width="100" Margin="0,0,5,0" Click="DeleteProductButton_Click"/>
-                        <Button Content="Обновить список" Width="120" Click="RefreshProductsButton_Click"/>
+                        <Button Content="Добавить товар" Width="140" Margin="0,0,5,0" Click="AddProductButton_Click"/>
+                        <Button Content="Редактировать" Width="140" Margin="0,0,5,0" Click="EditProductButton_Click"/>
+                        <Button Content="Удалить" Width="140" Margin="0,0,5,0" Click="DeleteProductButton_Click"/>
+                        <Button Content="Обновить список" Width="140" Click="RefreshProductsButton_Click"/>
                     </StackPanel>
 
                     <!-- Список товаров -->
@@ -51,8 +51,7 @@
                             <DataGridTextColumn Header="Код (САП)" Binding="{Binding ProductCode}" Width="100"/>
                             <DataGridTextColumn Header="Наименование" Binding="{Binding Name}" Width="*"/>
                             <DataGridTextColumn Header="Штрих-код" Binding="{Binding Barcode}" Width="130"/>
-                            <DataGridTextColumn Header="Цена" Binding="{Binding Price, StringFormat=C}" Width="80"/>
-                            <DataGridCheckBoxColumn Header="Марк." Binding="{Binding IsMarked}" Width="50"/>
+                            <DataGridTextColumn Header="Цена" Binding="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=ru-RU}" Width="80"/>
                             <DataGridTextColumn Header="ID" Binding="{Binding ProductId}" Width="50"/>
                         </DataGrid.Columns>
                     </DataGrid>
@@ -75,15 +74,15 @@
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
                         <Label Content="Поиск товара:" VerticalAlignment="Center"/>
                         <TextBox x:Name="StockSearchTextBox" Width="200" Margin="5,0" VerticalContentAlignment="Center"/>
-                        <Button Content="Найти" Width="80" Margin="5,0" Click="SearchStockButton_Click"/>
-                        <Button Content="Сбросить" Width="80" Click="ResetStockSearchButton_Click"/>
+                        <Button Content="Найти" Width="100" Margin="5,0" Click="SearchStockButton_Click"/>
+                        <Button Content="Сбросить" Width="100" Click="ResetStockSearchButton_Click"/>
                     </StackPanel>
 
                     <!-- Кнопки действий для остатков -->
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,5">
-                        <Button Content="Приемка/Корректировка" Width="180" Margin="0,0,5,0" Click="AdjustStockButton_Click"/>
+                        <Button Content="Приемка/Корректировка" Width="200" Margin="0,0,5,0" Click="AdjustStockButton_Click"/>
                         <!-- Можно добавить кнопки для инвентаризации и т.д. -->
-                        <Button Content="Обновить список" Width="120" Click="RefreshStockButton_Click"/>
+                        <Button Content="Обновить список" Width="150" Click="RefreshStockButton_Click"/>
                     </StackPanel>
 
                     <!-- Список остатков -->
@@ -92,8 +91,12 @@
                         <!-- Для отображения Названия товара нужен JOIN или доп. модель -->
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="ID Товара" Binding="{Binding ProductId}" Width="80"/>
-                            <!-- <DataGridTextColumn Header="Наименование" Binding="{Binding Product.Name}" Width="*"/> -->
-                            <!-- Так не сработает без доп. логики -->
+                            <DataGridTextColumn Header="Код (САП)" Binding="{Binding ProductCode}" Width="100"/>
+                            <!-- ДОБАВЛЕНО -->
+                            <DataGridTextColumn Header="Штрих-код" Binding="{Binding Barcode}" Width="130"/>
+                            <!-- ДОБАВЛЕНО -->
+                            <DataGridTextColumn Header="Наименование" Binding="{Binding ProductName}" Width="*"/>
+                            <!-- Имя теперь может быть "*" -->
                             <DataGridTextColumn Header="Количество" Binding="{Binding Quantity}" Width="100"/>
                             <DataGridTextColumn Header="Обновлено" Binding="{Binding LastUpdated, StringFormat='dd.MM.yyyy HH:mm'}" Width="140"/>
                             <DataGridTextColumn Header="ID Остатка" Binding="{Binding StockItemId}" Width="80"/>
@@ -114,11 +117,11 @@
 
                     <!-- Кнопки действий для пользователей -->
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,5">
-                        <Button Content="Добавить пользователя" Width="150" Margin="0,0,5,0" Click="AddUserButton_Click"/>
-                        <Button Content="Редактировать" Width="100" Margin="0,0,5,0" Click="EditUserButton_Click"/>
-                        <Button Content="Сбросить пароль" Width="120" Margin="0,0,5,0" Click="ResetUserPasswordButton_Click"/>
-                        <Button Content="Удалить" Width="100" Margin="0,0,5,0" Click="DeleteUserButton_Click"/>
-                        <Button Content="Обновить список" Width="120" Click="RefreshUsersButton_Click"/>
+                        <Button Content="Добавить пользователя" Width="190" Margin="0,0,5,0" Click="AddUserButton_Click"/>
+                        <Button Content="Редактировать" Width="120" Margin="0,0,5,0" Click="EditUserButton_Click"/>
+                        <Button Content="Сбросить пароль" Width="150" Margin="0,0,5,0" Click="ResetUserPasswordButton_Click"/>
+                        <Button Content="Удалить" Width="120" Margin="0,0,5,0" Click="DeleteUserButton_Click"/>
+                        <Button Content="Обновить список" Width="150" Click="RefreshUsersButton_Click"/>
                     </StackPanel>
 
                     <!-- Список пользователей -->
@@ -146,10 +149,10 @@
 
                     <!-- Кнопки действий для акций -->
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,5">
-                        <Button Content="Добавить акцию" Width="120" Margin="0,0,5,0" Click="AddDiscountButton_Click"/>
-                        <Button Content="Редактировать" Width="100" Margin="0,0,5,0" Click="EditDiscountButton_Click"/>
-                        <Button Content="Удалить" Width="100" Margin="0,0,5,0" Click="DeleteDiscountButton_Click"/>
-                        <Button Content="Обновить список" Width="120" Click="RefreshDiscountsButton_Click"/>
+                        <Button Content="Добавить акцию" Width="150" Margin="0,0,5,0" Click="AddDiscountButton_Click"/>
+                        <Button Content="Редактировать" Width="120" Margin="0,0,5,0" Click="EditDiscountButton_Click"/>
+                        <Button Content="Удалить" Width="120" Margin="0,0,5,0" Click="DeleteDiscountButton_Click"/>
+                        <Button Content="Обновить список" Width="150" Click="RefreshDiscountsButton_Click"/>
                     </StackPanel>
 
                     <!-- Список акций -->
@@ -178,7 +181,14 @@
             <StatusBarItem>
                 <TextBlock x:Name="UserInfoStatusBarText" Text="Пользователь: "/>
             </StatusBarItem>
-            <!-- Можно добавить другие элементы в статус бар -->
+            <!-- Можно добавить разделитель -->
+            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" />
+            <!-- Кнопка выхода справа -->
+            <StatusBarItem HorizontalAlignment="Right">
+                <Button x:Name="LogoutButton" Content="Выход из системы" Padding="5,2" Margin="0,0,5,0"
+                        Click="LogoutButton_Click" ToolTip="Завершить сеанс и вернуться к выбору режима"/>
+            </StatusBarItem>
+            <!-- Можно добавить другие элементы справа, если нужно -->
         </StatusBar>
 
     </Grid>

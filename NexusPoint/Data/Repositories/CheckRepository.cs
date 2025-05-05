@@ -59,33 +59,26 @@ namespace NexusPoint.Data.Repositories
 
                         // 2. Вставить позиции чека
                         string insertItemQuery = @"
-                            INSERT INTO CheckItems (CheckId, ProductId, Quantity, PriceAtSale, ItemTotalAmount, DiscountAmount, MarkingCode)
-                            VALUES (@CheckId, @ProductId, @Quantity, @PriceAtSale, @ItemTotalAmount, @DiscountAmount, @MarkingCode);";
+                           INSERT INTO CheckItems (CheckId, ProductId, Quantity, PriceAtSale, ItemTotalAmount, DiscountAmount, AppliedDiscountId)
+                            VALUES (@CheckId, @ProductId, @Quantity, @PriceAtSale, @ItemTotalAmount, @DiscountAmount, @AppliedDiscountId);";
 
                         foreach (var item in check.Items)
                         {
-                            item.CheckId = newCheckId; // Установить ID чека для позиции
+                            item.ItemTotalAmount = Math.Round(item.Quantity * item.PriceAtSale - item.DiscountAmount, 2);
+                            item.CheckId = newCheckId;
                             connection.Execute(insertItemQuery, item, transaction);
 
-                            // 3. Обновить остатки товаров (списание при продаже, возврат при возврате)
-                            decimal quantityChange = check.IsReturn ? item.Quantity : -item.Quantity; // Если возврат - добавляем, если продажа - вычитаем
+                            // 3. Обновить остатки товаров
+                            decimal quantityChange = check.IsReturn ? item.Quantity : -item.Quantity;
+
+                            _stockItemRepository.EnsureStockItemExists(item.ProductId, connection, transaction);
+
                             bool stockUpdated = _stockItemRepository.UpdateStockQuantity(item.ProductId, quantityChange, connection, transaction);
-                            if (!stockUpdated && !check.IsReturn) // Если не удалось списать остаток при ПРОДАЖЕ
+
+                            if (!stockUpdated && check.IsReturn)
                             {
-                                // Решить, что делать: откатить транзакцию или разрешить уход в минус?
-                                // Пока откатываем для строгого учета
-                                throw new InvalidOperationException($"Не удалось обновить остаток для товара ID {item.ProductId}. Возможно, товара нет в наличии.");
-                            }
-                            else if (!stockUpdated && check.IsReturn)
-                            {
-                                // Если при возврате не нашлась запись в StockItems - это странно, но можно попробовать создать
-                                _stockItemRepository.EnsureStockItemExists(item.ProductId, connection, transaction);
-                                // Повторно пытаемся обновить
-                                stockUpdated = _stockItemRepository.UpdateStockQuantity(item.ProductId, quantityChange, connection, transaction);
-                                if (!stockUpdated)
-                                {
-                                    throw new InvalidOperationException($"Не удалось обновить остаток при возврате для товара ID {item.ProductId} даже после попытки создания записи.");
-                                }
+                                // Если при ВОЗВРАТЕ не удалось обновить остаток даже после Ensure, это проблема
+                                throw new InvalidOperationException($"Не удалось обновить остаток при возврате для товара ID {item.ProductId} после EnsureStockItemExists.");
                             }
                         }
 

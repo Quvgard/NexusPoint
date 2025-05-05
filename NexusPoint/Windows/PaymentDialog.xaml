@@ -72,8 +72,8 @@
 
         <!-- Кнопки -->
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="OkButton" Content="Оплатить [Enter]" Width="120" Height="35" IsDefault="True" Click="OkButton_Click"/>
-            <Button x:Name="CancelButton" Content="Отмена [Esc]" Width="100" Height="35" Margin="10,0,0,0" IsCancel="True" Click="CancelButton_Click"/>
+            <Button x:Name="OkButton" Content="Оплатить [Enter]" Width="140" Height="35" IsDefault="True" Click="OkButton_Click"/>
+            <Button x:Name="CancelButton" Content="Отмена [Esc]" Width="120" Height="35" Margin="10,0,0,0" IsCancel="True" Click="CancelButton_Click"/>
         </StackPanel>
 
     </Grid>

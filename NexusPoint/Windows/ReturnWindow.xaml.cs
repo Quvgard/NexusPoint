@@ -1,10 +1,16 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
+using NexusPoint.Utils;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -14,279 +20,226 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 
 namespace NexusPoint.Windows
 {
-    /// <summary>
-    /// Логика взаимодействия для ReturnWindow.xaml
-    /// </summary>
     public partial class ReturnWindow : Window
     {
         private readonly User CurrentUser;
-        private readonly Shift CurrentShift; // Принимаем текущую смену
+        private readonly Shift CurrentShift;
 
-        private readonly CheckRepository _checkRepository;
-        private readonly ProductRepository _productRepository;
-        // StockItemRepository не нужен напрямую, т.к. CheckRepository сам обновляет остатки
-
-        private Check _originalCheck = null; // Найденный чек продажи
-        // Используем ObservableCollection, чтобы ListView обновлялся
-        private ObservableCollection<CheckItemView> _originalCheckItemsView = new ObservableCollection<CheckItemView>();
-        private List<CheckItemView> _itemsToReturn = new List<CheckItemView>(); // Какие позиции выбраны для возврата
+        // --- Business Logic Manager ---
+        private readonly ReturnManager _returnManager;
 
         public ReturnWindow(User user, Shift shift)
         {
             InitializeComponent();
-            CurrentUser = user;
-            CurrentShift = shift; // Сохраняем текущую смену
+            CurrentUser = user ?? throw new ArgumentNullException(nameof(user));
+            CurrentShift = shift; // Проверка на null при загрузке
 
-            _checkRepository = new CheckRepository();
-            _productRepository = new ProductRepository();
+            // Инициализация репозиториев
+            var checkRepository = new CheckRepository();
+            var productRepository = new ProductRepository();
+            var stockItemRepository = new StockItemRepository();
 
-            OriginalCheckListView.ItemsSource = _originalCheckItemsView; // Привязываем коллекцию
+            // Инициализация менеджера
+            _returnManager = new ReturnManager(checkRepository, productRepository, stockItemRepository);
+
+            // Устанавливаем DataContext для привязок XAML
+            this.DataContext = _returnManager;
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Можно предзаполнить номер смены текущей сменой
-            if (CurrentShift != null)
+            if (CurrentShift == null)
             {
-                ShiftNumberTextBox.Text = CurrentShift.ShiftNumber.ToString();
+                ShowError("Ошибка: Не удалось определить текущую открытую смену. Возврат невозможен.");
+                FindCheckButton.IsEnabled = false;
+                CheckNumberTextBox.IsEnabled = false;
+                ShiftNumberTextBox.IsEnabled = false;
+                return;
             }
+            ShiftNumberTextBox.Text = CurrentShift.ShiftNumber.ToString();
             CheckNumberTextBox.Focus();
         }
 
-        // Поиск чека продажи
-        private void FindCheckButton_Click(object sender, RoutedEventArgs e)
+        private async void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                await FindCheckAsync();
+                e.Handled = true;
+            }
+        }
+
+        private async void FindCheckButton_Click(object sender, RoutedEventArgs e)
+        {
+            await FindCheckAsync();
+        }
+
+        private async Task FindCheckAsync()
         {
             ClearError();
-            ClearCheckDetails();
-
             if (!int.TryParse(CheckNumberTextBox.Text, out int checkNumber) || checkNumber <= 0)
-            {
-                ShowError("Введите корректный номер чека.");
-                return;
-            }
+            { ShowError("Введите корректный номер чека."); return; }
             if (!int.TryParse(ShiftNumberTextBox.Text, out int shiftNumber) || shiftNumber <= 0)
-            {
-                ShowError("Введите корректный номер смены.");
-                return;
-            }
+            { ShowError("Введите корректный номер смены."); return; }
 
-            try
-            {
-                _originalCheck = _checkRepository.FindCheckByNumberAndShift(checkNumber, shiftNumber);
+            FindCheckButton.IsEnabled = false;
+            SearchIndicator.Visibility = Visibility.Visible;
+            StatusText.Text = "Поиск чека...";
 
-                if (_originalCheck == null)
+            bool found = await _returnManager.FindOriginalCheckAsync(checkNumber, shiftNumber);
+
+            SearchIndicator.Visibility = Visibility.Collapsed;
+            StatusText.Text = "";
+            FindCheckButton.IsEnabled = true;
+
+
+            if (!found && _returnManager.OriginalCheck == null) // Если не найден ИЛИ это был чек возврата (OriginalCheck сбросился)
+            {
+                // Сообщение об ошибке покажется из ReturnManager или будет в StatusText
+                // Проверим StatusText на всякий случай
+                if (string.IsNullOrEmpty(StatusText.Text))
                 {
-                    ShowError($"Чек продажи №{checkNumber} в смене №{shiftNumber} не найден.");
-                    return;
+                    ShowError($"Чек продажи №{checkNumber} в смене №{shiftNumber} не найден или является чеком возврата.");
                 }
+                // OriginalCheckListView и итоги очистятся через ClearCurrentReturn в менеджере
+            }
+            else if (found)
+            {
+                // Обновляем текст типа оплаты (т.к. его не привязали)
+                UpdatePaymentTypeText();
+                // Данные списка и итогов обновятся через привязку
+            }
+            CheckNumberTextBox.Focus(); // Возвращаем фокус
+            CheckNumberTextBox.SelectAll();
+        }
 
-                if (_originalCheck.IsReturn)
+        // Обновляем текстовое представление типа оплаты (можно заменить конвертером в XAML)
+        private void UpdatePaymentTypeText()
+        {
+            if (_returnManager.OriginalCheck != null)
+            {
+                string paymentTypeDisplay = _returnManager.OriginalCheck.PaymentType;
+                switch (_returnManager.OriginalCheck.PaymentType?.ToLower())
                 {
-                    ShowError($"Чек №{checkNumber} уже является чеком возврата.");
-                    _originalCheck = null; // Сбрасываем, чтобы нельзя было оформить возврат
-                    return;
+                    case "cash": paymentTypeDisplay = "Наличные"; break;
+                    case "card": paymentTypeDisplay = "Карта"; break;
+                    case "mixed": paymentTypeDisplay = "Смешанная"; break;
                 }
-
-                // Чек найден, отображаем информацию
-                PopulateCheckDetails();
-                ActionPanel.Visibility = Visibility.Visible; // Показываем кнопки действий
-                // ProcessReturnButton пока неактивна
+                OriginalPaymentTypeText.Text = paymentTypeDisplay;
             }
-            catch (Exception ex)
+            else
             {
-                ShowError($"Ошибка при поиске чека: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Check find error: {ex}");
+                OriginalPaymentTypeText.Text = "";
             }
         }
 
-        // Заполнение деталей найденного чека
-        private async void PopulateCheckDetails()
+
+        // Валидация ввода количества
+        private void QuantityTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
-            if (_originalCheck == null) return;
+            TextBox textBox = sender as TextBox;
+            string currentText = textBox.Text.Insert(textBox.CaretIndex, e.Text);
+            string decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
+            string pattern = $@"^\d*({Regex.Escape(decimalSeparator)}?\d*)?$";
+            Regex regex = new Regex(pattern);
+            if (!regex.IsMatch(currentText)) e.Handled = true;
+            // Пересчет итогов и обновление кнопки произойдет автоматически через привязку и INotifyPropertyChanged
+        }
 
-            CheckInfoPanel.Visibility = Visibility.Visible;
-            OriginalCheckNumberText.Text = $"{_originalCheck.CheckNumber} (ID: {_originalCheck.CheckId})";
-            OriginalCheckDateText.Text = _originalCheck.Timestamp.ToString("g"); // dd.MM.yyyy HH:mm
-
-            _originalCheckItemsView.Clear(); // Очищаем предыдущие
-
-            // Асинхронно загружаем продукты для отображения имен
-            List<int> productIds = _originalCheck.Items.Select(i => i.ProductId).Distinct().ToList();
-            var products = (await System.Threading.Tasks.Task.Run(() => _productRepository.GetProductsByIds(productIds)))
-                           .ToDictionary(p => p.ProductId);
-
-            foreach (var item in _originalCheck.Items)
+        // Нажатие Enter в списке (можно использовать для перехода к редактированию количества, если нужно)
+        private void OriginalCheckListView_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && OriginalCheckListView.SelectedItem is ReturnItemView selectedItem)
             {
-                var itemView = new CheckItemView
+                // Найти TextBox в выбранной строке и сфокусироваться на нем
+                var listViewItem = OriginalCheckListView.ItemContainerGenerator.ContainerFromItem(selectedItem) as ListViewItem;
+                if (listViewItem != null)
                 {
-                    // Копируем основные свойства из CheckItem
-                    CheckItemId = item.CheckItemId,
-                    CheckId = item.CheckId,
-                    ProductId = item.ProductId,
-                    Quantity = item.Quantity,
-                    PriceAtSale = item.PriceAtSale,
-                    // ItemTotalAmount не присваиваем, оно рассчитается само
-                    DiscountAmount = item.DiscountAmount,
-                    MarkingCode = item.MarkingCode,
-                    // Добавляем найденный продукт
-                    Product = products.TryGetValue(item.ProductId, out Product p) ? p : null
-                };
-                _originalCheckItemsView.Add(itemView);
+                    var quantityTextBox = FindVisualChild<TextBox>(listViewItem);
+                    if (quantityTextBox != null && quantityTextBox.IsEnabled)
+                    {
+                        quantityTextBox.Focus();
+                        quantityTextBox.SelectAll();
+                        e.Handled = true;
+                    }
+                }
             }
         }
 
-        // Очистка деталей чека
-        private void ClearCheckDetails()
+        // Вспомогательный метод для поиска элемента внутри визуального дерева
+        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
         {
-            _originalCheck = null;
-            _originalCheckItemsView.Clear();
-            _itemsToReturn.Clear();
-            CheckInfoPanel.Visibility = Visibility.Collapsed;
-            ActionPanel.Visibility = Visibility.Collapsed;
-            ProcessReturnButton.IsEnabled = false;
+            if (parent == null) return null;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(parent, i);
+                if (child != null && child is T)
+                {
+                    return (T)child;
+                }
+                else
+                {
+                    T childOfChild = FindVisualChild<T>(child);
+                    if (childOfChild != null)
+                        return childOfChild;
+                }
+            }
+            return null;
         }
 
-        // Кнопка "Вернуть весь чек"
+
+        // Кнопка "Выбрать все"
         private void ReturnAllButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_originalCheck == null) return;
-
-            _itemsToReturn = _originalCheckItemsView.ToList(); // Все позиции идут на возврат
-            ProcessReturnButton.IsEnabled = true; // Активируем кнопку оформления
-            ShowError($"Готово к возврату всего чека ({_itemsToReturn.Count} поз.). Нажмите 'Оформить возврат'.", isInfo: true);
-            // Выделяем все строки в списке для наглядности
-            OriginalCheckListView.SelectAll();
+            _returnManager.SetReturnQuantityForAll(true);
+            // UI обновится через привязки
         }
 
-        // Кнопка "Вернуть выбранное"
-        private void ReturnSelectedButton_Click(object sender, RoutedEventArgs e)
+        // Кнопка "Сбросить кол-во"
+        private void ClearSelectionButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_originalCheck == null || OriginalCheckListView.SelectedItems.Count == 0)
-            {
-                ShowError("Выберите одну или несколько позиций для возврата.");
-                return;
-            }
-
-            _itemsToReturn = OriginalCheckListView.SelectedItems.Cast<CheckItemView>().ToList();
-            ProcessReturnButton.IsEnabled = true;
-            ShowError($"Готово к возврату {_itemsToReturn.Count} выбранных позиций. Нажмите 'Оформить возврат'.", isInfo: true);
+            _returnManager.SetReturnQuantityForAll(false); // Устанавливаем 0 для всех
+                                                           // UI обновится через привязки
         }
+
 
         // Кнопка "Оформить возврат"
-        private void ProcessReturnButton_Click(object sender, RoutedEventArgs e)
+        private async void ProcessReturnButton_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentShift == null || CurrentShift.IsClosed)
+            ProcessReturnButton.IsEnabled = false; // Блокируем на время обработки
+            FindCheckButton.IsEnabled = false;
+            StatusText.Text = "Обработка возврата...";
+
+            bool success = await _returnManager.ProcessReturnAsync(CurrentShift, CurrentUser);
+
+            StatusText.Text = "";
+            FindCheckButton.IsEnabled = true;
+            // ProcessReturnButton останется выключенным, если CanProcessReturn == false после очистки
+
+            if (success)
             {
-                ShowError("Невозможно оформить возврат: текущая смена не открыта.");
-                return;
+                MessageBox.Show("Возврат успешно оформлен.", "Возврат", MessageBoxButton.OK, MessageBoxImage.Information);
+                this.DialogResult = true; // Закрываем окно
             }
-            if (_originalCheck == null || !_itemsToReturn.Any())
+            // Если ошибка, сообщение будет показано из ReturnManager, кнопка останется доступной (если CanProcessReturn = true)
+            else
             {
-                ShowError("Нет данных для оформления возврата.");
-                return;
-            }
-
-            // --- Проверка и сканирование марок ---
-            List<CheckItem> returnCheckItems = new List<CheckItem>();
-            foreach (var itemToReturnView in _itemsToReturn)
-            {
-                string scannedMarkingCode = itemToReturnView.MarkingCode; // По умолчанию берем старую марку (если она была)
-
-                // Если товар маркированный, ЗАПРАШИВАЕМ скан марки
-                if (itemToReturnView.Product != null && itemToReturnView.Product.IsMarked)
-                {
-                    var markingDialog = new InputDialog("Возврат маркированного товара",
-                        $"Отсканируйте/введите код маркировки для возвращаемого товара:\n'{itemToReturnView.ProductName}'",
-                        ""); // Поле ввода пустое
-
-                    if (markingDialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(markingDialog.InputText))
-                    {
-                        scannedMarkingCode = markingDialog.InputText.Trim();
-                        // Здесь можно добавить валидацию сканированной марки, если требуется
-                        // Например, сравнить с оригинальной (itemToReturnView.MarkingCode)
-                        // Или проверить формат/длину
-                    }
-                    else
-                    {
-                        // Пользователь отменил ввод марки
-                        ShowError($"Возврат отменен: не указан код маркировки для '{itemToReturnView.ProductName}'.");
-                        return; // Прерываем весь процесс возврата
-                    }
-                }
-
-                // Создаем объект CheckItem для чека возврата
-                returnCheckItems.Add(new CheckItem
-                {
-                    // CheckId будет установлен при сохранении чека возврата
-                    ProductId = itemToReturnView.ProductId,
-                    Quantity = itemToReturnView.Quantity, // Возвращаем то же количество
-                    PriceAtSale = itemToReturnView.PriceAtSale, // По той же цене
-                    // ItemTotalAmount будет рассчитана или взята из PriceAtSale/Quantity/DiscountAmount
-                    DiscountAmount = itemToReturnView.DiscountAmount, // С той же скидкой
-                    MarkingCode = scannedMarkingCode // Записываем ОТСКАННИРОВАННУЮ марку
-                });
-            }
-
-            // --- Формирование чека возврата ---
-            decimal returnTotalAmount = returnCheckItems.Sum(i => i.ItemTotalAmount);
-            decimal returnDiscountAmount = returnCheckItems.Sum(i => i.DiscountAmount);
-
-            var returnCheck = new Check
-            {
-                ShiftId = CurrentShift.ShiftId, // Текущая смена
-                CheckNumber = _checkRepository.GetNextCheckNumber(CurrentShift.ShiftId), // Следующий номер чека
-                Timestamp = DateTime.Now,
-                UserId = CurrentUser.UserId,
-                TotalAmount = returnTotalAmount, // Общая сумма возврата (положительное число)
-                PaymentType = "Cash", // Упрощенно: возврат всегда наличными
-                CashPaid = 0, // Мы не получаем деньги
-                CardPaid = 0,
-                DiscountAmount = returnDiscountAmount, // Сумма скидок возвращаемых товаров
-                IsReturn = true, // Флаг возврата
-                OriginalCheckId = _originalCheck.CheckId, // Ссылка на чек продажи
-                Items = returnCheckItems // Список возвращаемых позиций
-            };
-
-            try
-            {
-                // --- Сохранение чека возврата и обновление остатков ---
-                var savedReturnCheck = _checkRepository.AddCheck(returnCheck);
-
-                // --- Имитация печати чека возврата ---
-                string printMessage = $"--- Чек Возврата №{savedReturnCheck.CheckNumber} ---\n";
-                printMessage += $"Основание: Чек продажи №{_originalCheck.CheckNumber} (Смена №{ShiftNumberTextBox.Text})\n";
-                printMessage += $"Сумма возврата: {savedReturnCheck.TotalAmount:C}\n";
-                printMessage += $"Возврат наличными."; // По нашему упрощению
-
-                MessageBox.Show(printMessage, "Возврат оформлен (Имитация печати)", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                this.DialogResult = true; // Успешно, закрываем окно
-            }
-            catch (InvalidOperationException invEx) // Ошибка обновления остатков
-            {
-                MessageBox.Show($"Не удалось оформить возврат:\n{invEx.Message}", "Ошибка остатков", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Критическая ошибка при оформлении возврата:\n{ex.Message}", "Ошибка сохранения", MessageBoxButton.OK, MessageBoxImage.Error);
-                System.Diagnostics.Debug.WriteLine($"Return check save error: {ex}");
+                ProcessReturnButton.IsEnabled = _returnManager.CanProcessReturn; // Восстанавливаем состояние кнопки
             }
         }
 
 
-        // Показ/Скрытие ошибок
+        // --- Вспомогательные ---
         private void ShowError(string message, bool isInfo = false)
         {
             StatusText.Text = message;
-            StatusText.Foreground = isInfo ? System.Windows.Media.Brushes.Blue : System.Windows.Media.Brushes.Red;
+            StatusText.Foreground = isInfo ? Brushes.Blue : Brushes.Red;
         }
+        private void ClearError() { StatusText.Text = string.Empty; }
 
-        private void ClearError()
-        {
-            StatusText.Text = string.Empty;
-        }
     }
 }

@@ -5,95 +5,117 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NexusPoint.Windows"
         xmlns:converters="clr-namespace:NexusPoint.Utils.Converters"
-    mc:Ignorable="d"
+        mc:Ignorable="d"
         Title="Оформление возврата" Height="650" Width="800"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Loaded="Window_Loaded">
     <Window.Resources>
-        <!-- Подключаем конвертеры, если они не в глобальных ресурсах -->
         <converters:IndexConverter x:Key="IndexConverter"/>
-        <converters:MarkingCodeToSymbolConverter x:Key="MarkingCodeToSymbolConverter"/>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:NotNullToVisibilityConverter x:Key="NotNullToVisibilityConverter"/>
     </Window.Resources>
     <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <!-- Поиск чека -->
             <RowDefinition Height="Auto"/>
-            <!-- Информация о найденном чеке -->
             <RowDefinition Height="*"/>
-            <!-- Список позиций чека -->
             <RowDefinition Height="Auto"/>
-            <!-- Кнопки действий с чеком/позициями -->
             <RowDefinition Height="Auto"/>
-            <!-- Статус/Ошибки -->
             <RowDefinition Height="Auto"/>
-            <!-- Основные кнопки -->
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Панель поиска чека -->
         <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
             <StackPanel Orientation="Horizontal">
                 <Label Content="Номер чека:" VerticalAlignment="Center"/>
-                <TextBox x:Name="CheckNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <TextBox x:Name="CheckNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center" KeyDown="SearchTextBox_KeyDown"/>
                 <Label Content="Номер смены:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"/>
+                <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center" KeyDown="SearchTextBox_KeyDown"/>
                 <Button x:Name="FindCheckButton" Content="Найти чек" Width="100" Margin="15,0,0,0" Click="FindCheckButton_Click"/>
+                <!-- Индикатор поиска -->
+                <TextBlock x:Name="SearchIndicator" Text="Поиск..." Margin="10,0,0,0" VerticalAlignment="Center" Foreground="Gray" Visibility="Collapsed"/>
             </StackPanel>
         </Border>
 
-        <!-- Информация о найденном чеке -->
-        <Grid Grid.Row="1" x:Name="CheckInfoPanel" Visibility="Collapsed">
+        <!-- Информация о найденном чеке (привязка к DataContext = ReturnManager) -->
+        <Grid Grid.Row="1" x:Name="CheckInfoPanel" Visibility="{Binding OriginalCheck, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=NotNull}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Label Grid.Column="0" Content="Чек №:" FontWeight="Bold"/>
-            <TextBlock Grid.Column="1" x:Name="OriginalCheckNumberText" VerticalAlignment="Center" Margin="5,0"/>
+            <TextBlock Grid.Column="1" Text="{Binding OriginalCheck.CheckNumber, StringFormat={}{0}}" VerticalAlignment="Center" Margin="5,0,0,0"/>
+            <TextBlock Grid.Column="1" Text="{Binding OriginalCheck.CheckId, StringFormat=(ID: {0})}" VerticalAlignment="Center" Margin="5,0,15,0" Foreground="Gray"/>
+
             <Label Grid.Column="2" Content="Дата:" FontWeight="Bold"/>
-            <TextBlock Grid.Column="3" x:Name="OriginalCheckDateText" VerticalAlignment="Center" Margin="5,0"/>
-            <!-- Можно добавить сумму чека -->
+            <TextBlock Grid.Column="3" Text="{Binding OriginalCheck.Timestamp, StringFormat='g'}" VerticalAlignment="Center" Margin="5,0,15,0"/>
+
+            <Label Grid.Column="4" Content="Оплата:" FontWeight="Bold"/>
+            <TextBlock Grid.Column="5" x:Name="OriginalPaymentTypeText" VerticalAlignment="Center" Margin="5,0"/>
+            <!-- Оставим code-behind для форматирования типа оплаты, т.к. конвертер усложнит -->
         </Grid>
 
-        <!-- Список позиций найденного чека -->
-        <ListView Grid.Row="2" x:Name="OriginalCheckListView" Margin="0,10" SelectionMode="Extended" BorderBrush="Gray" BorderThickness="1">
-            <!-- Используем тот же стиль отображения, что и в CashierWindow -->
+        <!-- Список позиций найденного чека (привязка к DataContext = ReturnManager) -->
+        <ListView Grid.Row="2" x:Name="OriginalCheckListView" ItemsSource="{Binding ReturnItems}" Margin="0,10" SelectionMode="Extended" BorderBrush="Gray" BorderThickness="1" KeyDown="OriginalCheckListView_KeyDown">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="№" DisplayMemberBinding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}, Converter={StaticResource IndexConverter}}" Width="40"/>
                     <GridViewColumn Header="Наименование" DisplayMemberBinding="{Binding ProductName}" Width="300"/>
-                    <GridViewColumn Header="Кол-во" DisplayMemberBinding="{Binding Quantity}" Width="70"/>
-                    <GridViewColumn Header="Цена" DisplayMemberBinding="{Binding PriceAtSale, StringFormat=C}" Width="90"/>
-                    <GridViewColumn Header="Скидка" DisplayMemberBinding="{Binding DiscountAmount, StringFormat=C}" Width="80"/>
-                    <GridViewColumn Header="Сумма" DisplayMemberBinding="{Binding ItemTotalAmount, StringFormat=C}" Width="100"/>
-                    <GridViewColumn Header="Марк." Width="50">
+                    <GridViewColumn Header="Кол-во (Продажа)" DisplayMemberBinding="{Binding Quantity}" Width="110"/>
+                    <!-- Уточнили заголовок -->
+                    <GridViewColumn Header="Возврат кол-во" Width="100">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding MarkingCode, Converter={StaticResource MarkingCodeToSymbolConverter}}" HorizontalAlignment="Center" FontWeight="Bold"/>
+                                <TextBox Text="{Binding ReturnQuantity, UpdateSourceTrigger=PropertyChanged}" Width="80" HorizontalAlignment="Center" IsEnabled="{Binding CanEditReturnQuantity}" PreviewTextInput="QuantityTextBox_PreviewTextInput"/>
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>
+                    <GridViewColumn Header="Цена" DisplayMemberBinding="{Binding PriceAtSale, StringFormat=C, ConverterCulture=ru-RU}" Width="90"/>
+                    <GridViewColumn Header="Скидка (за ед.)" DisplayMemberBinding="{Binding DiscountPerUnit, StringFormat=N2, ConverterCulture=ru-RU}" Width="100"/>
+                    <!-- Добавили скидку за ед. -->
+                    <GridViewColumn Header="Сумма (продажа)" DisplayMemberBinding="{Binding OriginalItemTotalAmount, StringFormat=C, ConverterCulture=ru-RU}" Width="110"/>
+                    <!-- Уточнили заголовок -->
                 </GridView>
             </ListView.View>
         </ListView>
 
+        <!-- Итоги возврата (привязка к DataContext = ReturnManager) -->
+        <Border Grid.Row="3" Background="WhiteSmoke" BorderBrush="LightGray" BorderThickness="1" Padding="10" Margin="0,5,0,5" Visibility="{Binding CanProcessReturn, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel>
+                <TextBlock Text="Итого к возврату:" FontWeight="Bold" FontSize="14" Margin="0,0,0,5"/>
+                <Grid>
+                    <TextBlock Text="Сумма:"/>
+                    <TextBlock Text="{Binding TotalReturnAmount, StringFormat=C, ConverterCulture=ru-RU}" HorizontalAlignment="Right" FontWeight="Bold"/>
+                </Grid>
+                <Grid>
+                    <TextBlock Text="Способ возврата:"/>
+                    <TextBlock Text="{Binding CalculatedReturnMethod}" HorizontalAlignment="Right" FontWeight="SemiBold"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+
         <!-- Кнопки действий -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" x:Name="ActionPanel" Visibility="Collapsed" Margin="0,0,0,10">
-            <Button x:Name="ReturnAllButton" Content="Вернуть весь чек" Width="150" Margin="0,0,10,0" Click="ReturnAllButton_Click"/>
-            <Button x:Name="ReturnSelectedButton" Content="Вернуть выбранное" Width="150" Click="ReturnSelectedButton_Click"/>
-            <TextBlock Text="(Используйте Ctrl или Shift для выбора нескольких позиций)" VerticalAlignment="Center" Margin="15,0,0,0" Foreground="Gray"/>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,10" Visibility="{Binding OriginalCheck, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=NotNull}">
+            <Button x:Name="ReturnAllButton" Content="Выбрать все" Width="140" Margin="0,0,10,0" Click="ReturnAllButton_Click"/>
+            <!-- Убрали кнопку Вернуть выбранное, т.к. выбор+изменение кол-ва делается в таблице -->
+            <Button x:Name="ClearSelectionButton" Content="Сбросить кол-во" Width="140" Margin="0,0,10,0" Click="ClearSelectionButton_Click"/>
+            <TextBlock Text="(Изменяйте количество в колонке 'Возврат кол-во')" VerticalAlignment="Center" Margin="15,0,0,0" Foreground="Gray"/>
         </StackPanel>
 
         <!-- Статус / Ошибки -->
-        <TextBlock Grid.Row="4" x:Name="StatusText" Foreground="Red" TextWrapping="Wrap" Margin="0,5"/>
+        <TextBlock Grid.Row="5" x:Name="StatusText" Foreground="Red" TextWrapping="Wrap" Margin="0,5"/>
 
         <!-- Основные кнопки -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="ProcessReturnButton" Content="Оформить возврат" Width="150" Height="30" IsEnabled="False" Click="ProcessReturnButton_Click"/>
-            <Button x:Name="CancelButton" Content="Отмена" Width="100" Height="30" Margin="10,0,0,0" IsCancel="True"/>
-            <!-- IsCancel закроет окно -->
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="ProcessReturnButton" Content="Оформить возврат" Width="150" Height="35" IsEnabled="{Binding CanProcessReturn}" Click="ProcessReturnButton_Click"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="100" Height="35" Margin="10,0,0,0" IsCancel="True"/>
         </StackPanel>
 
     </Grid>

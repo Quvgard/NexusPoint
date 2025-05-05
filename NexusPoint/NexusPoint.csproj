@@ -37,6 +37,9 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>ico.ico</ApplicationIcon>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="BCrypt.Net-Next, Version=4.0.3.0, Culture=neutral, PublicKeyToken=1e11be04b6288443, processorArchitecture=MSIL">
       <HintPath>..\packages\BCrypt.Net-Next.4.0.3\lib\net472\BCrypt.Net-Next.dll</HintPath>
@@ -49,6 +52,9 @@
     </Reference>
     <Reference Include="EntityFramework.SqlServer, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
       <HintPath>..\packages\EntityFramework.6.4.4\lib\net45\EntityFramework.SqlServer.dll</HintPath>
+    </Reference>
+    <Reference Include="Humanizer, Version=2.14.0.0, Culture=neutral, PublicKeyToken=979442b78dfc278e, processorArchitecture=MSIL">
+      <HintPath>..\packages\Humanizer.Core.2.14.1\lib\netstandard2.0\Humanizer.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=9.0.0.1, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.9.0.1\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
@@ -99,12 +105,46 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="BusinessLogic\AuthManager.cs" />
+    <Compile Include="BusinessLogic\AuthorizationService.cs" />
+    <Compile Include="BusinessLogic\DiscountCalculator.cs" />
+    <Compile Include="BusinessLogic\DiscountManager.cs" />
+    <Compile Include="BusinessLogic\DocumentPrintingService.cs" />
+    <Compile Include="BusinessLogic\PaymentProcessor.cs" />
+    <Compile Include="BusinessLogic\ProductManager.cs" />
+    <Compile Include="BusinessLogic\ReportService.cs" />
+    <Compile Include="BusinessLogic\ReturnManager.cs" />
+    <Compile Include="BusinessLogic\SaleManager.cs" />
+    <Compile Include="BusinessLogic\ShiftManager.cs" />
+    <Compile Include="BusinessLogic\StockManager.cs" />
+    <Compile Include="BusinessLogic\UserManager.cs" />
+    <Compile Include="Models\CheckItemView.cs" />
+    <Compile Include="Models\ReturnItemView.cs" />
+    <Compile Include="Utils\Converters\AmountToWordsConverter.cs" />
     <Compile Include="Utils\Converters\BooleanToSaleReturnConverter.cs" />
+    <Compile Include="Utils\Converters\BooleanToVisibilityConverter.cs" />
     <Compile Include="Utils\Converters\IndexConverter.cs" />
     <Compile Include="Utils\Converters\MarkingCodeToSymbolConverter.cs" />
+    <Compile Include="Utils\Converters\NotNullToVisibilityConverter.cs" />
     <Compile Include="Utils\PasswordHasher.cs" />
+    <Compile Include="Utils\PrinterService.cs" />
+    <Compile Include="Windows\AddEditDiscountWindow.xaml.cs">
+      <DependentUpon>AddEditDiscountWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\AddEditProductWindow.xaml.cs">
+      <DependentUpon>AddEditProductWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\AddEditUserWindow.xaml.cs">
+      <DependentUpon>AddEditUserWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\AdjustStockWindow.xaml.cs">
+      <DependentUpon>AdjustStockWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Windows\CashierWindow.xaml.cs">
       <DependentUpon>CashierWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\DiscountDialog.xaml.cs">
+      <DependentUpon>DiscountDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Windows\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
@@ -148,7 +188,27 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="Windows\AddEditDiscountWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\AddEditProductWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\AddEditUserWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\AdjustStockWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="Windows\CashierWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Windows\DiscountDialog.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -218,8 +278,16 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="BusinessLogic\" />
     <Folder Include="UserControls\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Иконка-2.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\ico.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="ico.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

@@ -1,8 +1,10 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using NexusPoint.Utils;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,140 +19,136 @@ using System.Windows.Shapes;
 
 namespace NexusPoint.Windows
 {
-    /// <summary>
-    /// Логика взаимодействия для LoginWindow.xaml
-    /// </summary>
     public partial class LoginWindow : Window
     {
-        // Свойство для хранения успешно аутентифицированного пользователя
         public User AuthenticatedUser { get; private set; }
 
-        private readonly UserRepository _userRepository; // Репозиторий для работы с пользователями
+        // Используем AuthManager
+        private readonly AuthManager _authManager;
+        private bool _preventCancel = false; // Флаг для режима блокировки
 
+        // Конструктор по умолчанию
         public LoginWindow()
         {
             InitializeComponent();
-            _userRepository = new UserRepository(); // Создаем экземпляр репозитория
+            // Создаем AuthManager (можно использовать DI в будущем)
+            _authManager = new AuthManager(new UserRepository());
 
-            // Устанавливаем фокус на поле ввода имени пользователя при загрузке
             Loaded += (sender, e) => UsernameTextBox.Focus();
-
-            // Опционально: Обработка Enter в PasswordBox для вызова логина
             PasswordBox.KeyDown += PasswordBox_KeyDown;
         }
 
-        // Обработчик нажатия кнопки "Войти"
+        // Конструктор для блокировки/презаполнения
+        public LoginWindow(string defaultUsername, bool preventCancel = false) : this()
+        {
+            _preventCancel = preventCancel; // Сохраняем флаг
+
+            if (!string.IsNullOrEmpty(defaultUsername))
+            {
+                UsernameTextBox.Text = defaultUsername;
+                // Перенаправляем фокус с Username на Password
+                Loaded -= (sender, e) => UsernameTextBox.Focus(); // Удаляем старый обработчик
+                Loaded += (sender, e) => PasswordBox.Focus(); // Добавляем новый
+            }
+            if (_preventCancel)
+            {
+                // Блокируем кнопку Отмена И закрытие окна крестиком/Alt+F4 (см. OnClosing)
+                CancelButton.IsEnabled = false;
+            }
+        }
+
+
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
         {
             await AttemptLogin();
         }
 
-        // Опционально: Обработчик нажатия Enter в поле пароля
         private async void PasswordBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
             {
-                // Предотвращаем дальнейшую обработку Enter, чтобы не было "бип" звука
                 e.Handled = true;
                 await AttemptLogin();
             }
         }
 
-        // Основная логика попытки входа
-        private async Task AttemptLogin() // Сделаем асинхронным на всякий случай (хотя SQLite быстрый)
+        private async Task AttemptLogin()
         {
-            // Скрываем предыдущие ошибки
             ClearError();
-
             string username = UsernameTextBox.Text.Trim();
-            string password = PasswordBox.Password; // Получаем пароль из PasswordBox
+            string password = PasswordBox.Password;
 
-            // Простая валидация ввода
-            if (string.IsNullOrWhiteSpace(username))
+            if (string.IsNullOrWhiteSpace(username)) { ShowError("Пожалуйста, введите имя пользователя (ШК)."); UsernameTextBox.Focus(); return; }
+            if (string.IsNullOrEmpty(password)) { ShowError("Пожалуйста, введите пароль."); PasswordBox.Focus(); return; }
+
+            SetButtonsEnabled(false); // Блокируем кнопки
+
+            // Вызываем AuthManager для аутентификации
+            AuthenticationResult authResult = await _authManager.AuthenticateUserAsync(username, password);
+
+            // Обрабатываем результат
+            switch (authResult.Status)
             {
-                ShowError("Пожалуйста, введите имя пользователя (ШК).");
-                UsernameTextBox.Focus();
-                return;
-            }
-            if (string.IsNullOrEmpty(password)) // PasswordBox не может быть null, но может быть пустым
-            {
-                ShowError("Пожалуйста, введите пароль.");
-                PasswordBox.Focus();
-                return;
+                case AuthResultStatus.Success:
+                    AuthenticatedUser = authResult.AuthenticatedUser;
+                    this.DialogResult = true; // Успех -> закрываем окно
+                    break;
+                case AuthResultStatus.UserNotFound:
+                    ShowError(authResult.ErrorMessage);
+                    UsernameTextBox.Focus(); UsernameTextBox.SelectAll();
+                    PasswordBox.Clear();
+                    break;
+                case AuthResultStatus.InvalidPassword:
+                    ShowError(authResult.ErrorMessage);
+                    PasswordBox.Focus(); PasswordBox.Clear();
+                    break;
+                case AuthResultStatus.Error:
+                    ShowError(authResult.ErrorMessage); // Показываем ошибку из AuthManager
+                    PasswordBox.Clear();
+                    break;
             }
 
-            // Блокируем кнопки на время проверки
-            SetButtonsEnabled(false);
-
-            try
+            // Включаем кнопки обратно, если не было успешного выхода
+            if (this.DialogResult != true)
             {
-                // Ищем пользователя в базе данных
-                // В реальном приложении здесь может быть асинхронный вызов
-                User user = _userRepository.GetUserByUsername(username);
-
-                if (user == null)
-                {
-                    ShowError("Пользователь с таким именем не найден.");
-                    UsernameTextBox.Focus(); // Возвращаем фокус на имя
-                    PasswordBox.Clear();    // Очищаем пароль
-                }
-                // Проверяем пароль с использованием нашего хешера
-                else if (PasswordHasher.VerifyPassword(password, user.HashedPassword))
-                {
-                    // Успешный вход!
-                    AuthenticatedUser = user; // Сохраняем пользователя
-                    this.DialogResult = true; // Устанавливаем результат диалога
-                    // Окно закроется автоматически
-                }
-                else
-                {
-                    // Неверный пароль
-                    ShowError("Неверный пароль.");
-                    PasswordBox.Clear();    // Очищаем пароль
-                    PasswordBox.Focus();    // Фокус на пароль для повторного ввода
-                }
-            }
-            catch (Exception ex)
-            {
-                // Обработка общих ошибок (например, ошибка подключения к БД)
-                System.Diagnostics.Debug.WriteLine($"Login error: {ex}");
-                ShowError($"Произошла ошибка при входе: {ex.Message}");
-                PasswordBox.Clear();
-            }
-            finally
-            {
-                // Включаем кнопки обратно в любом случае
                 SetButtonsEnabled(true);
             }
         }
 
 
-        // Обработчик нажатия кнопки "Отмена"
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            this.DialogResult = false; // Устанавливаем результат и закрываем окно
+            // Кнопка Отмена работает только если preventCancel = false
+            if (!_preventCancel)
+            {
+                this.DialogResult = false;
+            }
         }
 
-        // Вспомогательный метод для отображения ошибок
-        private void ShowError(string message)
-        {
-            ErrorMessageText.Text = message;
-            ErrorMessageText.Visibility = Visibility.Visible;
-        }
-
-        // Вспомогательный метод для скрытия ошибок
-        private void ClearError()
-        {
-            ErrorMessageText.Text = string.Empty;
-            ErrorMessageText.Visibility = Visibility.Collapsed;
-        }
-
-        // Вспомогательный метод для блокировки/разблокировки кнопок
+        // Вспомогательные методы для UI (остаются без изменений)
+        private void ShowError(string message) { ErrorMessageText.Text = message; ErrorMessageText.Visibility = Visibility.Visible; }
+        private void ClearError() { ErrorMessageText.Text = string.Empty; ErrorMessageText.Visibility = Visibility.Collapsed; }
         private void SetButtonsEnabled(bool isEnabled)
         {
             LoginButton.IsEnabled = isEnabled;
-            CancelButton.IsEnabled = isEnabled;
-            // Можно добавить индикатор загрузки (ProgressBar) и управлять его видимостью здесь же
+            // Управляем кнопкой Cancel в зависимости от флага _preventCancel
+            CancelButton.IsEnabled = isEnabled && !_preventCancel;
+        }
+
+        // Переопределяем закрытие окна для режима блокировки
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            base.OnClosing(e);
+
+            // Запрещаем закрытие окна (крестиком, Alt+F4), если:
+            // 1. Это режим блокировки (_preventCancel = true)
+            // 2. И окно закрывается НЕ из-за установки DialogResult (т.е. не после успешного логина)
+            if (_preventCancel && this.DialogResult == null)
+            {
+                e.Cancel = true; // Отменяем закрытие
+                                 // Можно показать сообщение, но оно может мешать
+                                 // MessageBox.Show("Для продолжения работы необходимо войти в систему.", "Вход обязателен", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
     }
 }

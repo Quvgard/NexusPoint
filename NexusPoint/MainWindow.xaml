@@ -5,7 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NexusPoint"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="NexusPoint - Выбор режима" Height="450" Width="800"
+        WindowStartupLocation="CenterScreen">
     <Grid>
         <StackPanel Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center">
             <Button x:Name="CashierModeButton" Content="Режим кассы" Width="250" Height="50" Margin="10" Click="CashierModeButton_Click"/>
