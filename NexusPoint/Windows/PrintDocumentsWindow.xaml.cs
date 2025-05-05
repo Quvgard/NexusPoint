@@ -1,4 +1,5 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using NexusPoint.Utils;
 using System;
@@ -18,33 +19,25 @@ using System.Windows.Shapes;
 
 namespace NexusPoint.Windows
 {
-    // Дополнительная модель для отображения в ListView с подгруженными данными
-    public class CheckDisplayView : Check
-    {
-        public User Cashier { get; set; }
-        public Shift Shift { get; set; } // Добавим смену
-        // Унаследует все остальные свойства от Check
-    }
-
     public partial class PrintDocumentsWindow : Window
     {
-        private readonly CheckRepository _checkRepository;
-        private readonly ShiftRepository _shiftRepository; // Нужен для поиска смены по номеру
-        private readonly UserRepository _userRepository;
-        private readonly ProductRepository _productRepository; // Нужен для товарного чека
-        private readonly DiscountRepository _discountRepository;
+        private readonly DocumentPrintingService _printingService;
+        private readonly ShiftRepository _shiftRepository;
 
-        private CheckDisplayView _selectedCheck = null; // Храним выбранный чек для действий
+        private CheckDisplayView _selectedCheck = null;
         private CultureInfo _russianCulture = new CultureInfo("ru-RU");
 
         public PrintDocumentsWindow()
         {
             InitializeComponent();
-            _checkRepository = new CheckRepository();
+            var checkRepository = new CheckRepository();
             _shiftRepository = new ShiftRepository();
-            _userRepository = new UserRepository();
-            _productRepository = new ProductRepository();
-            _discountRepository = new DiscountRepository();
+            var userRepository = new UserRepository();
+            var productRepository = new ProductRepository();
+            var discountRepository = new DiscountRepository();
+            _printingService = new DocumentPrintingService(
+                checkRepository, _shiftRepository, userRepository, productRepository, discountRepository
+            );
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -52,408 +45,171 @@ namespace NexusPoint.Windows
             try
             {
                 var currentShift = _shiftRepository.GetCurrentOpenShift();
-                if (currentShift != null)
-                {
-                    ShiftNumberTextBox.Text = currentShift.ShiftNumber.ToString();
-                }
+                if (currentShift != null) ShiftNumberTextBox.Text = currentShift.ShiftNumber.ToString();
             }
-            catch (Exception ex)
-            {
-                ShowError($"Не удалось определить тек. смену: {ex.Message}");
-                // Оставляем поле пустым
-            }
+            catch (Exception ex) { ShowError($"Не удалось определить тек. смену: {ex.Message}"); }
 
             CheckNumberTextBox.Focus();
-            UpdateActionButtonsState(); // Изначально кнопки неактивны
+            UpdateActionButtonsState(); // Кнопки изначально неактивны
         }
 
-        //KeyDown для полей поиска
-        private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
+        private async void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter)
-            {
-                // Вызываем тот же метод, что и кнопка "Найти чек"
-                FindCheckButton_Click(FindCheckButton, new RoutedEventArgs());
-                e.Handled = true; // Поглощаем Enter, чтобы он не обрабатывался дальше
-            }
+            if (e.Key == Key.Enter) { await FindCheckAsync(); e.Handled = true; }
         }
 
-        // Поиск чека
-        private void FindCheckButton_Click(object sender, RoutedEventArgs e)
+        private async void FindCheckButton_Click(object sender, RoutedEventArgs e)
         {
-            ClearError();
-            ClearDisplay();
-
-            if (!int.TryParse(CheckNumberTextBox.Text, out int checkNumber) || checkNumber <= 0)
-            {
-                ShowError("Введите корректный номер чека.");
-                return;
-            }
-            if (!int.TryParse(ShiftNumberTextBox.Text, out int shiftNumber) || shiftNumber <= 0)
-            {
-                ShowError("Введите корректный номер смены.");
-                return;
-            }
-
-            try
-            {
-                // Ищем чек по номеру и номеру смены
-                Check foundCheck = _checkRepository.FindCheckByNumberAndShift(checkNumber, shiftNumber);
-
-                if (foundCheck == null)
-                {
-                    ShowError($"Чек №{checkNumber} в смене №{shiftNumber} не найден.");
-                }
-                else
-                {
-                    DisplayChecks(new List<Check> { foundCheck });
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowError($"Ошибка при поиске чека: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Find check error: {ex}");
-            }
+            await FindCheckAsync();
         }
 
-        // Копия последнего чека
-        private void PrintLastCheckCopyButton_Click(object sender, RoutedEventArgs e)
+        private async Task FindCheckAsync()
         {
-            ClearError();
-            ClearDisplay();
-            try
+            ClearError(); ClearDisplay(); // ClearDisplay сбросит _selectedCheck в null
+            if (!int.TryParse(CheckNumberTextBox.Text, out int checkNumber) || checkNumber <= 0) { ShowError("Введите корректный номер чека."); return; }
+            if (!int.TryParse(ShiftNumberTextBox.Text, out int shiftNumber) || shiftNumber <= 0) { ShowError("Введите корректный номер смены."); return; }
+
+            var foundCheckView = await _printingService.FindCheckAsync(checkNumber, shiftNumber);
+
+            if (foundCheckView == null)
             {
-                // Запрашиваем последний чек из репозитория (нужно добавить метод)
-                Check lastCheck = _checkRepository.GetLastCheck(); // Добавьте этот метод в CheckRepository
-                if (lastCheck == null)
-                {
-                    ShowError("Не найдено ни одного чека.");
-                }
-                else
-                {
-                    DisplayChecks(new List<Check> { lastCheck });
-                    // Сразу печатаем копию
-                    if (_selectedCheck != null) PrintCheckCopy(_selectedCheck);
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowError($"Ошибка при получении последнего чека: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Get last check error: {ex}");
-            }
-        }
-
-        // Отображение найденных чеков (или одного чека)
-        private async void DisplayChecks(List<Check> checks)
-        {
-            var checkViews = new List<CheckDisplayView>();
-            if (checks != null && checks.Any())
-            {
-                // Асинхронно подгружаем кассиров и смены для отображения
-                var userIds = checks.Select(c => c.UserId).Distinct().ToList();
-                var shiftIds = checks.Select(c => c.ShiftId).Distinct().ToList();
-
-                var usersTask = System.Threading.Tasks.Task.Run(() => _userRepository.GetUsersByIds(userIds)); // Нужно добавить GetUsersByIds
-                var shiftsTask = System.Threading.Tasks.Task.Run(() => _shiftRepository.GetShiftsByIds(shiftIds)); // Нужно добавить GetShiftsByIds
-
-                await System.Threading.Tasks.Task.WhenAll(usersTask, shiftsTask);
-
-                var users = usersTask.Result.ToDictionary(u => u.UserId);
-                var shifts = shiftsTask.Result.ToDictionary(s => s.ShiftId);
-
-
-                foreach (var check in checks)
-                {
-                    // Дозагружаем позиции, если они не были загружены ранее
-                    if (check.Items == null || !check.Items.Any())
-                    {
-                        check.Items = _checkRepository.GetCheckItemsByCheckId(check.CheckId);
-                    }
-
-                    var view = new CheckDisplayView
-                    {
-                        // Копируем свойства из Check
-                        CheckId = check.CheckId,
-                        ShiftId = check.ShiftId,
-                        CheckNumber = check.CheckNumber,
-                        Timestamp = check.Timestamp,
-                        UserId = check.UserId,
-                        TotalAmount = check.TotalAmount,
-                        PaymentType = check.PaymentType,
-                        CashPaid = check.CashPaid,
-                        CardPaid = check.CardPaid,
-                        DiscountAmount = check.DiscountAmount,
-                        IsReturn = check.IsReturn,
-                        OriginalCheckId = check.OriginalCheckId,
-                        Items = check.Items, // Копируем список позиций
-
-                        // Добавляем связанные данные
-                        Cashier = users.TryGetValue(check.UserId, out User u) ? u : null,
-                        Shift = shifts.TryGetValue(check.ShiftId, out Shift s) ? s : null
-                    };
-                    checkViews.Add(view);
-                }
-            }
-
-            ChecksListView.ItemsSource = checkViews;
-            // Выбираем первый элемент, если он есть
-            if (checkViews.Any())
-            {
-                ChecksListView.SelectedIndex = 0;
-                _selectedCheck = checkViews.First();
+                ShowError($"Чек №{checkNumber} в смене №{shiftNumber} не найден.");
+                // _selectedCheck уже null после ClearDisplay()
             }
             else
             {
-                _selectedCheck = null;
+                ChecksListView.ItemsSource = new List<CheckDisplayView> { foundCheckView };
+                // --- ИЗМЕНЕНИЕ: Явно устанавливаем _selectedCheck и обновляем кнопки ---
+                ChecksListView.SelectedIndex = 0;
+                _selectedCheck = foundCheckView; // Устанавливаем выбранный чек
+                UpdateActionButtonsState();      // Обновляем состояние кнопок СРАЗУ
+                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
             }
-            UpdateActionButtonsState(); // Обновляем доступность кнопок
         }
 
-        // Обновление состояния кнопок действий
+        private async void PrintLastCheckCopyButton_Click(object sender, RoutedEventArgs e)
+        {
+            ClearError(); ClearDisplay(); // Сбрасываем предыдущий выбор
+
+            var lastCheckView = await _printingService.GetLastCheckAsync();
+
+            if (lastCheckView == null)
+            {
+                ShowError("Не найдено ни одного чека.");
+                // _selectedCheck уже null
+                UpdateActionButtonsState(); // Обновляем кнопки (будут неактивны)
+            }
+            else
+            {
+                ChecksListView.ItemsSource = new List<CheckDisplayView> { lastCheckView };
+                // --- ИЗМЕНЕНИЕ: Устанавливаем _selectedCheck и обновляем кнопки ДО печати ---
+                ChecksListView.SelectedIndex = 0;
+                _selectedCheck = lastCheckView; // Устанавливаем выбранный чек
+                UpdateActionButtonsState();     // Обновляем состояние кнопок
+
+                // Теперь можно безопасно вызвать печать
+                await PrintSelectedCheckCopyAsync();
+                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+            }
+        }
+
+        // Обновление состояния кнопок (без изменений в логике, но теперь вызывается корректно)
         private void UpdateActionButtonsState()
         {
             bool isCheckSelected = _selectedCheck != null;
             bool isSaleCheckSelected = isCheckSelected && !_selectedCheck.IsReturn;
-
             PrintCopyButton.IsEnabled = isCheckSelected;
-            PrintTovarnyCheckButton.IsEnabled = isSaleCheckSelected; // Товарный чек только для продаж
-            PrintDiscountDetailsButton.IsEnabled = isCheckSelected && _selectedCheck.DiscountAmount > 0; // Если были скидки
+            PrintTovarnyCheckButton.IsEnabled = isSaleCheckSelected;
+            PrintDiscountDetailsButton.IsEnabled = isCheckSelected && _selectedCheck.DiscountAmount > 0;
         }
 
-        // Выбор чека в списке
+        // Выбор чека в списке (без изменений)
         private void ChecksListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             _selectedCheck = ChecksListView.SelectedItem as CheckDisplayView;
-            UpdateActionButtonsState();
+            UpdateActionButtonsState(); // Обновляем кнопки при ручном выборе
         }
 
 
         // --- Кнопки действий ---
-
-        private void PrintCopyButton_Click(object sender, RoutedEventArgs e)
+        private async void PrintCopyButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_selectedCheck != null)
-            {
-                PrintCheckCopy(_selectedCheck);
-            }
-            else
-            {
-                ShowError("Сначала найдите или выберите чек.");
-            }
+            await PrintSelectedCheckCopyAsync();
         }
 
-        private void PrintTovarnyCheckButton_Click(object sender, RoutedEventArgs e)
+        private async void PrintTovarnyCheckButton_Click(object sender, RoutedEventArgs e)
+        {
+            await PrintSelectedTovarnyCheckAsync();
+        }
+
+        private async void PrintDiscountDetailsButton_Click(object sender, RoutedEventArgs e)
+        {
+            await PrintSelectedDiscountDetailsAsync();
+        }
+
+
+        // --- Асинхронные методы печати (проверка _selectedCheck остается) ---
+        private async Task PrintSelectedCheckCopyAsync()
+        {
+            // Проверка _selectedCheck здесь все еще нужна на случай прямого вызова
+            if (_selectedCheck != null)
+            {
+                try
+                {
+                    ShowError("Формирование копии чека...", isInfo: true); // Инфо сообщение
+                    string content = await _printingService.FormatCheckCopyAsync(_selectedCheck);
+                    PrinterService.Print($"Копия чека №{_selectedCheck.CheckNumber}", content);
+                    ShowError("Копия чека 'отправлена на печать'.", isInfo: true);
+                }
+                catch (Exception ex) { ShowError($"Ошибка печати копии: {ex.Message}"); }
+                finally { if (StatusText.Text == "Формирование копии чека...") ClearError(); } // Очищаем, если не было ошибки
+            }
+            else { ShowError("Сначала найдите или выберите чек."); } // Это сообщение теперь не должно появляться для "Копии последнего"
+        }
+
+        private async Task PrintSelectedTovarnyCheckAsync()
         {
             if (_selectedCheck != null && !_selectedCheck.IsReturn)
             {
-                PrintTovarnyCheck(_selectedCheck);
+                try
+                {
+                    ShowError("Формирование товарного чека...", isInfo: true);
+                    string content = await _printingService.FormatTovarnyCheckAsync(_selectedCheck);
+                    PrinterService.Print($"Товарный чек №{_selectedCheck.CheckNumber}", content);
+                    ShowError("Товарный чек 'отправлен на печать'.", isInfo: true);
+                }
+                catch (Exception ex) { ShowError($"Ошибка печати товарного чека: {ex.Message}"); }
+                finally { if (StatusText.Text == "Формирование товарного чека...") ClearError(); }
             }
-            else
-            {
-                ShowError("Выберите чек продажи для печати товарного чека.");
-            }
+            else { ShowError("Выберите чек ПРОДАЖИ для печати товарного чека."); }
         }
 
-        private void PrintDiscountDetailsButton_Click(object sender, RoutedEventArgs e)
+        private async Task PrintSelectedDiscountDetailsAsync()
         {
             if (_selectedCheck != null)
             {
-                PrintDiscountDetails(_selectedCheck);
+                try
+                {
+                    ShowError("Формирование расшифровки скидок...", isInfo: true);
+                    string content = await _printingService.FormatDiscountDetailsAsync(_selectedCheck);
+                    PrinterService.Print($"Скидки к чеку №{_selectedCheck.CheckNumber}", content);
+                    ShowError("Расшифровка скидок 'отправлена на печать'.", isInfo: true);
+                }
+                catch (Exception ex) { ShowError($"Ошибка печати скидок: {ex.Message}"); }
+                finally { if (StatusText.Text == "Формирование расшифровки скидок...") ClearError(); }
             }
-            else
-            {
-                ShowError("Сначала найдите или выберите чек.");
-            }
+            else { ShowError("Сначала найдите или выберите чек."); }
         }
 
 
-        // --- Логика "Печати" (Имитация) ---
-
-        private async void PrintCheckCopy(CheckDisplayView check)
-        {
-            // Имитация печати копии фискального чека
-            // Формируем текст, похожий на фискальный
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine("--- КОПИЯ ЧЕКА ---");
-            sb.AppendLine($"ООО \"NexusPoint\""); // Пример организации
-            sb.AppendLine($"Кассир: {check.Cashier?.FullName ?? "Неизвестно"}");
-            sb.AppendLine($"ИНН: 1234567890   ЗН ККТ: 00012345"); // Пример данных
-            sb.AppendLine($"Смена №: {check.Shift?.ShiftNumber ?? check.ShiftId}   Чек №: {check.CheckNumber}");
-            sb.AppendLine($"{check.Timestamp:G}");
-            sb.AppendLine(check.IsReturn ? "*** ВОЗВРАТ ПРИХОДА ***" : "*** ПРИХОД ***");
-            sb.AppendLine("---------------------------------");
-
-            // Загружаем названия товаров для позиций
-            var productIds = check.Items.Select(i => i.ProductId).Distinct().ToList();
-            var products = (await System.Threading.Tasks.Task.Run(() => _productRepository.GetProductsByIds(productIds)))
-                           .ToDictionary(p => p.ProductId);
-
-            foreach (var item in check.Items)
-            {
-                string productName = products.TryGetValue(item.ProductId, out Product p) ? p.Name : "<Товар?>";
-                sb.AppendLine($"{productName}");
-                sb.AppendLine($"  {item.Quantity} x {item.PriceAtSale.ToString("N2", _russianCulture)} = {(item.Quantity * item.PriceAtSale).ToString("N2", _russianCulture)}");
-                if (item.DiscountAmount > 0)
-                {
-                    sb.AppendLine($"  Скидка: {item.DiscountAmount.ToString("N2", _russianCulture)}");
-                }
-                sb.AppendLine($"  ИТОГ ПО ПОЗИЦИИ: {item.ItemTotalAmount.ToString("N2", _russianCulture)}");
-            }
-            sb.AppendLine("---------------------------------");
-            sb.AppendLine($"ПОДЫТОГ: {check.Items.Sum(i => i.Quantity * i.PriceAtSale).ToString("N2", _russianCulture)}");
-            if (check.DiscountAmount > 0)
-            {
-                sb.AppendLine($"СКИДКА НА ЧЕК: {check.DiscountAmount.ToString("N2", _russianCulture)}");
-            }
-            sb.AppendLine($"ИТОГО: {check.TotalAmount.ToString("N2", _russianCulture)}");
-            sb.AppendLine("---------------------------------");
-            string paymentTypeText = check.PaymentType == "Cash" ? "НАЛИЧНЫМИ" :
-                                      check.PaymentType == "Card" ? "КАРТОЙ" : "СМЕШАННАЯ";
-            sb.AppendLine($"ОПЛАТА ({paymentTypeText}): {check.TotalAmount.ToString("C", _russianCulture)}");
-            if (check.PaymentType == "Cash" || check.PaymentType == "Mixed")
-                sb.AppendLine($"  ПОЛУЧЕНО НАЛ: {check.CashPaid.ToString("C", _russianCulture)}");
-            if (check.PaymentType == "Card" || check.PaymentType == "Mixed")
-                sb.AppendLine($"  ПОЛУЧЕНО КАРТОЙ: {check.CardPaid.ToString("C", _russianCulture)}");
-            decimal change = (check.CashPaid + check.CardPaid) - check.TotalAmount;
-            // Корректный расчет сдачи для копии (если не хранится)
-            if (!check.IsReturn && change > 0.001m)
-            {
-                sb.AppendLine($"СДАЧА: {change.ToString("C", _russianCulture)}");
-            }
-            sb.AppendLine("---------------------------------");
-            sb.AppendLine($"ФН: 999900001111222   ФД: {check.CheckId + 10000}  ФП: 1234567890"); // Пример ФПД
-            sb.AppendLine("--- КОНЕЦ КОПИИ ---");
-
-
-            PrinterService.Print($"Копия чека №{check.CheckNumber}", sb.ToString());
-            ShowError("Копия чека 'отправлена на печать'.", isInfo: true);
-        }
-
-        private async void PrintTovarnyCheck(CheckDisplayView check)
-        {
-            // Имитация печати товарного чека (нефискальный)
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"--- ТОВАРНЫЙ ЧЕК № {check.CheckNumber} от {check.Timestamp:d} ---");
-            sb.AppendLine($"Продавец: ООО \"NexusPoint\"");
-            sb.AppendLine($"Кассир: {check.Cashier?.FullName ?? "-"}");
-            sb.AppendLine("--------------------------------------------------");
-            sb.AppendLine("| № | Наименование товара          | Кол-во | Цена  | Сумма |");
-            sb.AppendLine("--------------------------------------------------");
-
-            var productIds = check.Items.Select(i => i.ProductId).Distinct().ToList();
-            var products = (await System.Threading.Tasks.Task.Run(() => _productRepository.GetProductsByIds(productIds)))
-                           .ToDictionary(p => p.ProductId);
-            int index = 1;
-            foreach (var item in check.Items)
-            {
-                string productName = products.TryGetValue(item.ProductId, out Product p) ? p.Name : "<Товар?>";
-                // Форматируем строку таблицы (примерно)
-                sb.AppendFormat("|{0,3}| {1,-28}|{2,8}|{3,7}|{4,7}|\n",
-                               index++,
-                               productName.Length > 28 ? productName.Substring(0, 28) : productName, // Обрезаем длинные названия
-                               item.Quantity,
-                               item.PriceAtSale.ToString("N2", _russianCulture), // Форматируем здесь
-                               item.ItemTotalAmount.ToString("N2", _russianCulture)); // Форматируем здесь
-            }
-            sb.AppendLine("--------------------------------------------------");
-            sb.AppendLine($"Всего наименований: {check.Items.Count}, на сумму: {check.TotalAmount.ToString("C", _russianCulture)}");
-            if (check.DiscountAmount > 0)
-            {
-                sb.AppendLine($"В том числе скидка: {check.DiscountAmount.ToString("N2", _russianCulture)} руб.");
-            }
-            sb.AppendLine("\nПодпись кассира: __________________");
-
-
-            PrinterService.Print($"Товарный чек №{check.CheckNumber}", sb.ToString());
-            ShowError("Товарный чек 'отправлен на печать'.", isInfo: true);
-        }
-
-        private async void PrintDiscountDetails(CheckDisplayView check)
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"--- Расшифровка скидок к чеку №{check.CheckNumber} ---");
-
-            if (check.DiscountAmount > 0 && check.Items != null && check.Items.Any())
-            {
-                // 1. Собираем ID всех примененных скидок
-                var appliedDiscountIds = check.Items
-                                            .Where(i => i.AppliedDiscountId.HasValue)
-                                            .Select(i => i.AppliedDiscountId.Value)
-                                            .Distinct()
-                                            .ToList();
-
-                Dictionary<int, Discount> discountsInfo = new Dictionary<int, Discount>();
-                if (appliedDiscountIds.Any())
-                {
-                    // 2. Загружаем информацию об этих скидках
-                    try
-                    {
-                        // Добавляем метод GetDiscountsByIds в DiscountRepository
-                        discountsInfo = (await Task.Run(() => _discountRepository.GetDiscountsByIds(appliedDiscountIds)))
-                                        .ToDictionary(d => d.DiscountId);
-                    }
-                    catch (Exception ex)
-                    {
-                        sb.AppendLine($"\n(Ошибка загрузки названий скидок: {ex.Message})");
-                    }
-                }
-
-                // 3. Формируем текст расшифровки
-                sb.AppendLine("Примененные акции:");
-                bool discountFound = false;
-                foreach (var item in check.Items)
-                {
-                    if (item.AppliedDiscountId.HasValue && item.DiscountAmount > 0)
-                    {
-                        string discountName = discountsInfo.TryGetValue(item.AppliedDiscountId.Value, out Discount discount)
-                                              ? discount.Name
-                                              : $"<Скидка ID: {item.AppliedDiscountId.Value}>"; // Показываем ID, если название не найдено
-
-                        // Загружаем название товара
-                        Product product = await Task.Run(() => _productRepository.FindProductById(item.ProductId));
-                        string productName = product?.Name ?? "<Товар?>";
-
-                        sb.AppendLine($"- К товару '{productName}': Акция '{discountName}' (Скидка: {item.DiscountAmount:C})");
-                        discountFound = true;
-                    }
-                }
-
-                // Если были скидки, но не привязанные к ID (например, ручная общая - пока не обрабатывается)
-                if (!discountFound)
-                {
-                    sb.AppendLine($"(Общая скидка на чек: {check.DiscountAmount:C})");
-                    // TODO: Добавить логику сохранения ручных скидок, если нужно их отображать отдельно
-                }
-
-                sb.AppendLine("\nОбщая сумма скидки по чеку: " + check.DiscountAmount.ToString("C", _russianCulture));
-
-            }
-            else
-            {
-                sb.AppendLine("Скидки к данному чеку не применялись.");
-            }
-
-            PrinterService.Print($"Скидки к чеку №{check.CheckNumber}", sb.ToString());
-            ShowError("Расшифровка скидок 'отправлена на печать'.", isInfo: true);
-        }
-
-
-
-        // Очистка и сообщения
+        // --- Очистка и сообщения ---
         private void ClearDisplay()
         {
             ChecksListView.ItemsSource = null;
             _selectedCheck = null;
-            UpdateActionButtonsState();
+            UpdateActionButtonsState(); // Обновляем кнопки при очистке
         }
-        private void ShowError(string message, bool isInfo = false)
-        {
-            StatusText.Text = message;
-            StatusText.Foreground = isInfo ? System.Windows.Media.Brushes.Blue : System.Windows.Media.Brushes.Red;
-        }
-        private void ClearError()
-        {
-            StatusText.Text = string.Empty;
-        }
+        private void ShowError(string message, bool isInfo = false) { StatusText.Text = message; StatusText.Foreground = isInfo ? System.Windows.Media.Brushes.Blue : System.Windows.Media.Brushes.Red; }
+        private void ClearError() { StatusText.Text = string.Empty; }
     }
 }

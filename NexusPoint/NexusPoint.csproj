@@ -37,6 +37,9 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>ico.ico</ApplicationIcon>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="BCrypt.Net-Next, Version=4.0.3.0, Culture=neutral, PublicKeyToken=1e11be04b6288443, processorArchitecture=MSIL">
       <HintPath>..\packages\BCrypt.Net-Next.4.0.3\lib\net472\BCrypt.Net-Next.dll</HintPath>
@@ -102,11 +105,27 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="BusinessLogic\AuthManager.cs" />
+    <Compile Include="BusinessLogic\AuthorizationService.cs" />
     <Compile Include="BusinessLogic\DiscountCalculator.cs" />
+    <Compile Include="BusinessLogic\DiscountManager.cs" />
+    <Compile Include="BusinessLogic\DocumentPrintingService.cs" />
+    <Compile Include="BusinessLogic\PaymentProcessor.cs" />
+    <Compile Include="BusinessLogic\ProductManager.cs" />
+    <Compile Include="BusinessLogic\ReportService.cs" />
+    <Compile Include="BusinessLogic\ReturnManager.cs" />
+    <Compile Include="BusinessLogic\SaleManager.cs" />
+    <Compile Include="BusinessLogic\ShiftManager.cs" />
+    <Compile Include="BusinessLogic\StockManager.cs" />
+    <Compile Include="BusinessLogic\UserManager.cs" />
+    <Compile Include="Models\CheckItemView.cs" />
+    <Compile Include="Models\ReturnItemView.cs" />
     <Compile Include="Utils\Converters\AmountToWordsConverter.cs" />
     <Compile Include="Utils\Converters\BooleanToSaleReturnConverter.cs" />
+    <Compile Include="Utils\Converters\BooleanToVisibilityConverter.cs" />
     <Compile Include="Utils\Converters\IndexConverter.cs" />
     <Compile Include="Utils\Converters\MarkingCodeToSymbolConverter.cs" />
+    <Compile Include="Utils\Converters\NotNullToVisibilityConverter.cs" />
     <Compile Include="Utils\PasswordHasher.cs" />
     <Compile Include="Utils\PrinterService.cs" />
     <Compile Include="Windows\AddEditDiscountWindow.xaml.cs">
@@ -260,6 +279,15 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="UserControls\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Иконка-2.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\ico.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="ico.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

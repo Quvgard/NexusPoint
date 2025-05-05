@@ -64,31 +64,21 @@ namespace NexusPoint.Data.Repositories
 
                         foreach (var item in check.Items)
                         {
-                            // Пересчитываем ItemTotalAmount перед сохранением
                             item.ItemTotalAmount = Math.Round(item.Quantity * item.PriceAtSale - item.DiscountAmount, 2);
-
                             item.CheckId = newCheckId;
-                            connection.Execute(insertItemQuery, item, transaction); // Dapper сам возьмет AppliedDiscountId из объекта item
+                            connection.Execute(insertItemQuery, item, transaction);
 
-                            // 3. Обновить остатки товаров (списание при продаже, возврат при возврате)
-                            decimal quantityChange = check.IsReturn ? item.Quantity : -item.Quantity; // Если возврат - добавляем, если продажа - вычитаем
+                            // 3. Обновить остатки товаров
+                            decimal quantityChange = check.IsReturn ? item.Quantity : -item.Quantity;
+
+                            _stockItemRepository.EnsureStockItemExists(item.ProductId, connection, transaction);
+
                             bool stockUpdated = _stockItemRepository.UpdateStockQuantity(item.ProductId, quantityChange, connection, transaction);
-                            if (!stockUpdated && !check.IsReturn) // Если не удалось списать остаток при ПРОДАЖЕ
+
+                            if (!stockUpdated && check.IsReturn)
                             {
-                                // Решить, что делать: откатить транзакцию или разрешить уход в минус?
-                                // Пока откатываем для строгого учета
-                                throw new InvalidOperationException($"Не удалось обновить остаток для товара ID {item.ProductId}. Возможно, товара нет в наличии.");
-                            }
-                            else if (!stockUpdated && check.IsReturn)
-                            {
-                                // Если при возврате не нашлась запись в StockItems - это странно, но можно попробовать создать
-                                _stockItemRepository.EnsureStockItemExists(item.ProductId, connection, transaction);
-                                // Повторно пытаемся обновить
-                                stockUpdated = _stockItemRepository.UpdateStockQuantity(item.ProductId, quantityChange, connection, transaction);
-                                if (!stockUpdated)
-                                {
-                                    throw new InvalidOperationException($"Не удалось обновить остаток при возврате для товара ID {item.ProductId} даже после попытки создания записи.");
-                                }
+                                // Если при ВОЗВРАТЕ не удалось обновить остаток даже после Ensure, это проблема
+                                throw new InvalidOperationException($"Не удалось обновить остаток при возврате для товара ID {item.ProductId} после EnsureStockItemExists.");
                             }
                         }
 

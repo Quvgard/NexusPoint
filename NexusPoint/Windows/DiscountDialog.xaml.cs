@@ -17,83 +17,82 @@ using System.Windows.Threading;
 
 namespace NexusPoint.Windows
 {
-    /// <summary>
-    /// Логика взаимодействия для DiscountDialog.xaml
-    /// </summary>
     public partial class DiscountDialog : Window
     {
         private readonly decimal _originalTotalAmount;
+        private CultureInfo _culture = CultureInfo.CurrentCulture;
 
         // Результаты диалога
-        public bool IsPercentage { get; private set; } = true; // По умолчанию процент
-        public decimal DiscountValue { get; private set; } = 0m; // Введенное значение
-        public decimal CalculatedDiscountAmount { get; private set; } = 0m; // Рассчитанная сумма скидки
+        public bool IsPercentage { get; private set; } = true;
+        public decimal DiscountValue { get; private set; } = 0m;
+        public decimal CalculatedDiscountAmount { get; private set; } = 0m;
 
         public DiscountDialog(decimal originalAmount)
         {
             InitializeComponent();
-            _originalTotalAmount = originalAmount;
+            _originalTotalAmount = Math.Max(0, originalAmount); 
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            OriginalAmountText.Text = _originalTotalAmount.ToString("C");
-            // Фокус на первый RadioButton по умолчанию
+            OriginalAmountText.Text = _originalTotalAmount.ToString("C", _culture);
+            UpdateCalculations(); // Инициализируем расчеты и суффикс
+            // Фокус устанавливается на первый элемент с TabIndex=1 (PercentageRadioButton)
             PercentageRadioButton.Focus();
-            UpdateCalculations();
         }
 
-        // --- НОВЫЙ: Обработка стрелок на RadioButton ---
+        // Навигация стрелками по RadioButton
         private void RadioButton_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Left || e.Key == Key.Up)
+            if (sender is RadioButton currentRadio)
             {
-                PercentageRadioButton.IsChecked = true;
-                PercentageRadioButton.Focus();
-                e.Handled = true;
+                RadioButton targetRadio = null;
+                if (e.Key == Key.Left || e.Key == Key.Up)
+                {
+                    if (currentRadio == AmountRadioButton) targetRadio = PercentageRadioButton;
+                }
+                else if (e.Key == Key.Right || e.Key == Key.Down)
+                {
+                    if (currentRadio == PercentageRadioButton) targetRadio = AmountRadioButton;
+                }
+
+                if (targetRadio != null)
+                {
+                    targetRadio.IsChecked = true;
+                    targetRadio.Focus();
+                    e.Handled = true;
+                }
             }
-            else if (e.Key == Key.Right || e.Key == Key.Down)
-            {
-                AmountRadioButton.IsChecked = true;
-                AmountRadioButton.Focus();
-                e.Handled = true;
-            }
-            // Если нажать Enter на RadioButton, он перейдет к следующему по TabIndex (TextBox)
         }
 
-        // --- НОВЫЙ: Обработка Enter в поле ввода значения ---
         private void ValueTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
             {
-                // Переводим фокус на кнопку OK, чтобы сработало IsDefault=true
-                OkButton.Focus();
-                // Можно также вызвать метод сохранения напрямую, если нужно
-                // SaveButton_Click(OkButton, new RoutedEventArgs());
-                e.Handled = true; // Поглощаем Enter
+                OkButton.Focus(); 
+                e.Handled = true;
             }
         }
-
 
         // Смена типа скидки
         private void DiscountType_Changed(object sender, RoutedEventArgs e)
         {
-            if (PercentageRadioButton == null || AmountRadioButton == null) return;
+            // Проверяем, загружены ли элементы
+            if (PercentageRadioButton == null || AmountRadioButton == null || ValueSuffixText == null) return;
 
             IsPercentage = PercentageRadioButton.IsChecked == true;
-            ValueSuffixText.Text = IsPercentage ? "%" : CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
-            UpdateCalculations();
+            ValueSuffixText.Text = IsPercentage ? "%" : _culture.NumberFormat.CurrencySymbol;
+            UpdateCalculations(); // Пересчитываем при смене типа
         }
 
-        // Валидация ввода значения (цифры, разделитель)
+        // Валидация ввода значения (только цифры и разделитель)
         private void DiscountValueTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
             TextBox textBox = sender as TextBox;
             string currentText = textBox.Text.Insert(textBox.CaretIndex, e.Text);
-            string decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
+            string decimalSeparator = _culture.NumberFormat.NumberDecimalSeparator;
             string pattern = $@"^\d*({Regex.Escape(decimalSeparator)}?\d*)?$";
             Regex regex = new Regex(pattern);
-
             if (!regex.IsMatch(currentText))
             {
                 e.Handled = true;
@@ -103,83 +102,102 @@ namespace NexusPoint.Windows
         // Изменение значения скидки
         private void DiscountValueTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            UpdateCalculations();
+            // Обновляем только если окно загружено
+            if (this.IsLoaded)
+            {
+                UpdateCalculations();
+            }
         }
 
         // Пересчет суммы скидки и итоговой суммы
         private void UpdateCalculations()
         {
             ClearError();
-            if (!decimal.TryParse(DiscountValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out decimal value) || value < 0)
+            OkButton.IsEnabled = false; 
+            CalculatedDiscountAmount = 0m; 
+
+            if (DiscountValueTextBox == null) return;
+
+            if (!decimal.TryParse(DiscountValueTextBox.Text, NumberStyles.Any, _culture, out decimal value) || value < 0)
             {
-                if (!string.IsNullOrEmpty(DiscountValueTextBox.Text)) // Показываем ошибку только если что-то введено
+                if (!string.IsNullOrEmpty(DiscountValueTextBox.Text)) 
                     ShowError("Некорректное значение.");
-                CalculatedDiscountAmount = 0m;
             }
             else
             {
-                DiscountValue = value; // Сохраняем введенное валидное значение
+                DiscountValue = value; 
+                if (value > 0) 
+                {
+                    OkButton.IsEnabled = true;
+                }
+
+
                 if (IsPercentage)
                 {
-                    if (value > 100) // Ограничение процента
+                    if (value > 100)
                     {
                         ShowError("Процент не может быть больше 100.");
-                        CalculatedDiscountAmount = _originalTotalAmount; // Считаем как 100%
+                        CalculatedDiscountAmount = _originalTotalAmount; 
                     }
                     else
                     {
                         CalculatedDiscountAmount = _originalTotalAmount * (value / 100m);
                     }
                 }
-                else // Сумма
+                else 
                 {
                     if (value > _originalTotalAmount)
                     {
                         ShowError("Скидка не может быть больше суммы чека.");
-                        CalculatedDiscountAmount = _originalTotalAmount; // Считаем как 100%
+                        CalculatedDiscountAmount = _originalTotalAmount; 
                     }
                     else
                     {
                         CalculatedDiscountAmount = value;
                     }
                 }
-                // Округляем до копеек
-                CalculatedDiscountAmount = Math.Round(CalculatedDiscountAmount, 2);
+                CalculatedDiscountAmount = Math.Round(CalculatedDiscountAmount, 2); 
             }
 
-
-            // Отображаем результаты
-            DiscountAmountText.Text = CalculatedDiscountAmount.ToString("C");
-            FinalAmountText.Text = (_originalTotalAmount - CalculatedDiscountAmount).ToString("C");
+            if (DiscountAmountText != null) DiscountAmountText.Text = CalculatedDiscountAmount.ToString("C", _culture);
+            if (FinalAmountText != null) FinalAmountText.Text = Math.Max(0, _originalTotalAmount - CalculatedDiscountAmount).ToString("C", _culture); 
         }
 
 
         private void OkButton_Click(object sender, RoutedEventArgs e)
         {
-            UpdateCalculations(); // Финальный пересчет
-            if (ErrorText.Visibility == Visibility.Visible) // Не закрываем, если есть ошибка валидации
+            UpdateCalculations(); // Финальный пересчет и валидация
+
+            // Проверяем ошибки валидации из UpdateCalculations
+            if (ErrorText.Visibility == Visibility.Visible)
             {
-                MessageBox.Show(ErrorText.Text, "Ошибка ввода", MessageBoxButton.OK, MessageBoxImage.Warning);
+                // Сообщение уже показано в ErrorText
                 return;
             }
-            if (DiscountValue <= 0) // Не применяем нулевую или отрицательную скидку
+            if (DiscountValue <= 0) // Не применяем нулевую скидку
             {
-                MessageBox.Show("Введите положительное значение скидки.", "Ввод скидки", MessageBoxButton.OK, MessageBoxImage.Information);
+                // Сообщение об этом не обязательно, т.к. кнопка ОК будет неактивна
+                // MessageBox.Show("Введите положительное значение скидки.", "Ввод скидки", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            this.DialogResult = true; // Устанавливаем результат
-        }
+            // Если CalculatedDiscountAmount равен 0 (например, при попытке применить скидку к нулевой сумме чека)
+            if (CalculatedDiscountAmount <= 0 && _originalTotalAmount > 0)
+            {
+                // Это может произойти, если скидка очень мала и округлилась до нуля.
+                // Можно либо разрешить закрытие, либо предупредить.
+                // Пока разрешим.
+            }
+            else if (CalculatedDiscountAmount <= 0 && _originalTotalAmount <= 0)
+            {
+                MessageBox.Show("Сумма чека равна нулю, применение скидки не имеет смысла.", "Нулевой чек", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
 
-        private void ShowError(string message)
-        {
-            ErrorText.Text = message;
-            ErrorText.Visibility = Visibility.Visible;
+
+            this.DialogResult = true;
         }
-        private void ClearError()
-        {
-            ErrorText.Text = string.Empty;
-            ErrorText.Visibility = Visibility.Collapsed;
-        }
+        private void ShowError(string message) { if (ErrorText != null) { ErrorText.Text = message; ErrorText.Visibility = Visibility.Visible; } }
+        private void ClearError() { if (ErrorText != null) { ErrorText.Text = string.Empty; ErrorText.Visibility = Visibility.Collapsed; } }
     }
 }

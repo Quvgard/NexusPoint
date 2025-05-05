@@ -1,4 +1,5 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
@@ -23,39 +24,40 @@ namespace NexusPoint.Windows
     /// </summary>
     public partial class AddEditProductWindow : Window
     {
-        private readonly ProductRepository _productRepository;
-        private readonly Product _originalProduct; // Хранит продукт для редактирования (null если добавление)
+        // Заменяем репозиторий на менеджер
+        private readonly ProductManager _productManager;
+        private readonly Product _originalProduct;
         private bool IsEditMode => _originalProduct != null;
 
-        // Конструктор для добавления нового товара
-        public AddEditProductWindow()
+        // Конструктор для добавления (принимает менеджер)
+        public AddEditProductWindow(ProductManager productManager)
         {
             InitializeComponent();
-            _productRepository = new ProductRepository();
-            _originalProduct = null; // Режим добавления
+            _productManager = productManager ?? throw new ArgumentNullException(nameof(productManager));
+            _originalProduct = null;
             this.Title = "Добавление товара";
         }
 
-        // Конструктор для редактирования существующего товара
-        public AddEditProductWindow(Product productToEdit) : this() // Вызываем основной конструктор
+        // Конструктор для редактирования (принимает менеджер и товар)
+        public AddEditProductWindow(ProductManager productManager, Product productToEdit) : this(productManager) // Вызов основного конструктора
         {
-            _originalProduct = productToEdit;
+            _originalProduct = productToEdit ?? throw new ArgumentNullException(nameof(productToEdit));
             this.Title = "Редактирование товара";
-            // Заполняем поля данными редактируемого товара
+
+            // Заполнение полей из редактируемого товара
             ProductCodeTextBox.Text = _originalProduct.ProductCode;
             NameTextBox.Text = _originalProduct.Name;
             DescriptionTextBox.Text = _originalProduct.Description;
             BarcodeTextBox.Text = _originalProduct.Barcode;
-            PriceTextBox.Text = _originalProduct.Price.ToString(CultureInfo.CurrentCulture); // Форматируем цену
+            PriceTextBox.Text = _originalProduct.Price.ToString(CultureInfo.CurrentCulture);
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Фокус на первое обязательное поле
             ProductCodeTextBox.Focus();
         }
 
-        // Валидация для поля Цены (как в PaymentDialog)
+        // Валидация ввода цены (остается без изменений)
         private void PriceTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
             TextBox textBox = sender as TextBox;
@@ -69,117 +71,56 @@ namespace NexusPoint.Windows
             }
         }
 
-        // Кнопка Сохранить
+        // Кнопка Сохранить (обновлено)
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
             ClearError();
 
-            // 1. Валидация ввода
+            // 1. Валидация ввода (основные проверки остаются здесь)
             string productCode = ProductCodeTextBox.Text.Trim();
             string name = NameTextBox.Text.Trim();
             string description = DescriptionTextBox.Text.Trim();
             string barcode = BarcodeTextBox.Text.Trim();
             string priceString = PriceTextBox.Text.Trim();
 
-            if (string.IsNullOrWhiteSpace(productCode))
-            {
-                ShowError("Код (САП) не может быть пустым.");
-                ProductCodeTextBox.Focus();
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                ShowError("Наименование не может быть пустым.");
-                NameTextBox.Focus();
-                return;
-            }
-            if (!decimal.TryParse(priceString, NumberStyles.Any, CultureInfo.CurrentCulture, out decimal price) || price < 0)
-            {
-                ShowError("Введите корректную неотрицательную цену.");
-                PriceTextBox.Focus();
-                PriceTextBox.SelectAll();
-                return;
-            }
-            // Доп. валидация: Уникальность кода товара (кроме случая редактирования самого себя)
-            var existingProduct = _productRepository.FindProductByCodeOrBarcode(productCode);
-            if (existingProduct != null && (!IsEditMode || existingProduct.ProductId != _originalProduct.ProductId))
-            {
-                ShowError($"Товар с кодом (САП) '{productCode}' уже существует.");
-                ProductCodeTextBox.Focus();
-                ProductCodeTextBox.SelectAll();
-                return;
-            }
-            // Доп. валидация: Уникальность штрих-кода (если он введен и не пуст)
-            if (!string.IsNullOrEmpty(barcode))
-            {
-                var existingBarcode = _productRepository.FindProductByCodeOrBarcode(barcode);
-                if (existingBarcode != null && (!IsEditMode || existingBarcode.ProductId != _originalProduct.ProductId))
-                {
-                    ShowError($"Товар со штрих-кодом '{barcode}' уже существует.");
-                    BarcodeTextBox.Focus();
-                    BarcodeTextBox.SelectAll();
-                    return;
-                }
-            }
+            if (string.IsNullOrWhiteSpace(productCode)) { ShowError("Код (САП) не может быть пустым."); ProductCodeTextBox.Focus(); return; }
+            if (string.IsNullOrWhiteSpace(name)) { ShowError("Наименование не может быть пустым."); NameTextBox.Focus(); return; }
+            if (!decimal.TryParse(priceString, NumberStyles.Any, CultureInfo.CurrentCulture, out decimal price) || price < 0) { ShowError("Введите корректную неотрицательную цену."); PriceTextBox.Focus(); PriceTextBox.SelectAll(); return; }
 
+            // Проверки уникальности теперь выполняются внутри ProductManager
 
             // 2. Создание или обновление объекта Product
             Product productToSave;
-            if (IsEditMode)
-            {
-                productToSave = _originalProduct; // Обновляем существующий
-            }
-            else
-            {
-                productToSave = new Product(); // Создаем новый
-            }
+            if (IsEditMode) { productToSave = _originalProduct; }
+            else { productToSave = new Product(); }
 
             productToSave.ProductCode = productCode;
             productToSave.Name = name;
             productToSave.Description = string.IsNullOrWhiteSpace(description) ? null : description;
-            productToSave.Barcode = string.IsNullOrEmpty(barcode) ? null : barcode; // Сохраняем null, если ШК пустой
-            productToSave.Price = Math.Round(price, 2); // Округляем цену
+            productToSave.Barcode = string.IsNullOrEmpty(barcode) ? null : barcode;
+            productToSave.Price = Math.Round(price, 2);
 
-            // 3. Сохранение в БД
-            try
+            // 3. Сохранение через ProductManager
+            bool success;
+            if (IsEditMode)
             {
-                bool success;
-                if (IsEditMode)
-                {
-                    success = _productRepository.UpdateProduct(productToSave);
-                }
-                else
-                {
-                    int newId = _productRepository.AddProduct(productToSave);
-                    success = newId > 0;
-                }
-
-                if (success)
-                {
-                    this.DialogResult = true; // Успешно, закрываем окно
-                }
-                else
-                {
-                    ShowError("Не удалось сохранить товар. Проверьте данные или обратитесь к администратору.");
-                }
+                success = _productManager.UpdateProduct(productToSave);
             }
-            catch (Exception ex) // Ловим ошибки БД (например, нарушение UNIQUE constraint, если валидация пропустила)
+            else
             {
-                ShowError($"Ошибка сохранения: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Save product error: {ex}");
+                success = _productManager.AddProduct(productToSave);
             }
+
+            // 4. Закрытие окна при успехе
+            if (success)
+            {
+                this.DialogResult = true;
+            }
+            // Сообщения об ошибках (включая уникальность) будут показаны менеджером
         }
 
-        // Показ/Скрытие ошибки
-        private void ShowError(string message)
-        {
-            ErrorText.Text = message;
-            ErrorText.Visibility = Visibility.Visible;
-        }
-        private void ClearError()
-        {
-            ErrorText.Text = string.Empty;
-            ErrorText.Visibility = Visibility.Collapsed;
-        }
+        // Показ/Скрытие ошибки (остаются)
+        private void ShowError(string message) { ErrorText.Text = message; ErrorText.Visibility = Visibility.Visible; }
+        private void ClearError() { ErrorText.Text = string.Empty; ErrorText.Visibility = Visibility.Collapsed; }
     }
 }

@@ -1,4 +1,5 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
@@ -17,19 +18,19 @@ using System.Windows.Shapes;
 
 namespace NexusPoint.Windows
 {
-    /// <summary>
-    /// Логика взаимодействия для ItemInfoViewWindow.xaml
-    /// </summary>
     public partial class ItemInfoViewWindow : Window
     {
-        private readonly ProductRepository _productRepository;
-        private readonly StockItemRepository _stockItemRepository;
+        // Заменяем репозитории на менеджеры
+        private readonly ProductManager _productManager;
+        private readonly StockManager _stockManager;
+        private CultureInfo _culture = CultureInfo.CurrentCulture; // Для форматирования
 
-        public ItemInfoViewWindow()
+        // Конструктор принимает менеджеры
+        public ItemInfoViewWindow(ProductManager productManager, StockManager stockManager)
         {
             InitializeComponent();
-            _productRepository = new ProductRepository();
-            _stockItemRepository = new StockItemRepository();
+            _productManager = productManager ?? throw new ArgumentNullException(nameof(productManager));
+            _stockManager = stockManager ?? throw new ArgumentNullException(nameof(stockManager));
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -43,7 +44,7 @@ namespace NexusPoint.Windows
             if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(ItemInputTextBox.Text))
             {
                 FindItem();
-                e.Handled = true; // Поглощаем Enter
+                e.Handled = true;
             }
         }
 
@@ -53,7 +54,7 @@ namespace NexusPoint.Windows
             FindItem();
         }
 
-        // Основная логика поиска и отображения
+        // Основная логика поиска и отображения 
         private void FindItem()
         {
             ClearError();
@@ -68,67 +69,57 @@ namespace NexusPoint.Windows
 
             try
             {
-                // Ищем товар в каталоге
-                Product product = _productRepository.FindProductByCodeOrBarcode(codeOrBarcode);
+                // Ищем товар через ProductManager
+                Product product = _productManager.FindByCodeOrBarcodeInternal(codeOrBarcode);
 
                 if (product == null)
                 {
                     ShowError($"Товар с кодом/ШК '{codeOrBarcode}' не найден.");
+                    ItemInputTextBox.Focus(); ItemInputTextBox.SelectAll(); // Возвращаем фокус для исправления
                     return;
                 }
 
-                // Товар найден, получаем остаток
-                decimal stockQuantity = _stockItemRepository.GetStockQuantity(product.ProductId);
+                // Товар найден, получаем остаток через StockManager
+                decimal stockQuantity = _stockManager.GetStockQuantityByProductId(product.ProductId);
+                // Ошибки получения остатка обработаются в StockManager
 
                 // Отображаем информацию
                 DisplayItemInfo(product, stockQuantity);
 
             }
-            catch (Exception ex)
+            catch (Exception ex) // Ловим ошибки, которые могли возникнуть не в менеджерах
             {
                 ShowError($"Ошибка при поиске товара: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"Find item error: {ex}");
             }
         }
 
-        // Отображение информации о найденном товаре
+        // Отображение информации о найденном товаре 
         private void DisplayItemInfo(Product product, decimal stockQuantity)
         {
-            CultureInfo culture = CultureInfo.CurrentCulture; // Или GetCultureInfo("ru-RU")
-
             ItemNameText.Text = product.Name;
             ItemDescriptionText.Text = product.Description ?? "-";
             ItemCodeText.Text = product.ProductCode;
-            ItemBarcodeText.Text = product.Barcode ?? "-"; // Показываем прочерк, если ШК нет
-            ItemPriceText.Text = product.Price.ToString("C", culture);
-            ItemStockText.Text = stockQuantity.ToString("N", culture); // "N" - числовой формат с разделителями
+            ItemBarcodeText.Text = product.Barcode ?? "-";
+            ItemPriceText.Text = product.Price.ToString("C", _culture);
+            ItemStockText.Text = stockQuantity.ToString("N", _culture);
 
-            ItemInfoGrid.Visibility = Visibility.Visible; // Показываем панель с информацией
-            ItemInputTextBox.Focus(); // Возвращаем фокус на ввод для следующего поиска
-            ItemInputTextBox.SelectAll(); // Выделяем текст
+            ItemInfoGrid.Visibility = Visibility.Visible;
+            ItemInputTextBox.Focus();
+            ItemInputTextBox.SelectAll();
         }
 
-        // Очистка отображаемой информации
+        // Очистка отображаемой информации 
         private void ClearItemInfo()
         {
-            ItemInfoGrid.Visibility = Visibility.Collapsed; // Скрываем панель
-            ItemNameText.Text = string.Empty;
-            ItemDescriptionText.Text = string.Empty;
-            ItemCodeText.Text = string.Empty;
-            ItemBarcodeText.Text = string.Empty;
-            ItemPriceText.Text = string.Empty;
-            ItemStockText.Text = string.Empty;
+            ItemInfoGrid.Visibility = Visibility.Collapsed;
+            ItemNameText.Text = string.Empty; ItemDescriptionText.Text = string.Empty;
+            ItemCodeText.Text = string.Empty; ItemBarcodeText.Text = string.Empty;
+            ItemPriceText.Text = string.Empty; ItemStockText.Text = string.Empty;
         }
 
-        // Показ/Скрытие ошибки
-        private void ShowError(string message)
-        {
-            StatusText.Text = message;
-        }
-
-        private void ClearError()
-        {
-            StatusText.Text = string.Empty;
-        }
+        // Показ/Скрытие ошибки 
+        private void ShowError(string message) { StatusText.Text = message; }
+        private void ClearError() { StatusText.Text = string.Empty; }
     }
 }

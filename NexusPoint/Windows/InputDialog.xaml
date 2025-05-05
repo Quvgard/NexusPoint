@@ -31,8 +31,8 @@
         </Grid>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="OkButton" Content="OK" Width="80" Height="25" IsDefault="True" Click="OkButton_Click"/>
-            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="25" Margin="10,0,0,0" IsCancel="True" Click="CancelButton_Click"/>
+            <Button x:Name="OkButton" Content="OK" Width="80" Height="35" IsDefault="True" Click="OkButton_Click"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="35" Margin="10,0,0,0" IsCancel="True" Click="CancelButton_Click"/>
         </StackPanel>
     </Grid>
 </Window>

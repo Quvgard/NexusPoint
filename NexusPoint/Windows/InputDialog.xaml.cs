@@ -19,11 +19,18 @@ namespace NexusPoint.Windows
     /// </summary>
     public partial class InputDialog : Window
     {
+        // Свойство для получения введенного текста или пароля
         public string InputText { get; private set; }
 
-        private bool _isPasswordMode = false; // Флаг режима пароля
+        private readonly bool _isPasswordMode;
 
-        // Обновленный конструктор
+        /// <summary>
+        /// Создает диалоговое окно для ввода текста или пароля.
+        /// </summary>
+        /// <param name="windowTitle">Заголовок окна.</param>
+        /// <param name="prompt">Текст подсказки для пользователя.</param>
+        /// <param name="defaultValue">Значение по умолчанию для поля ввода.</param>
+        /// <param name="isPassword">True, если нужно использовать поле для ввода пароля (PasswordBox).</param>
         public InputDialog(string windowTitle, string prompt, string defaultValue = "", bool isPassword = false)
         {
             InitializeComponent();
@@ -33,15 +40,12 @@ namespace NexusPoint.Windows
 
             if (_isPasswordMode)
             {
-                // Если режим пароля, скрываем TextBox и показываем PasswordBox
                 InputTextBox.Visibility = Visibility.Collapsed;
-                // Создаем PasswordBox динамически или имеем его в XAML и просто показываем
-                PasswordInputBox.Visibility = Visibility.Visible;
-                PasswordInputBox.Password = defaultValue; // Устанавливаем значение по умолчанию (если нужно)
+                PasswordInputBox.Visibility = Visibility.Visible; // Используем имя из XAML
+                PasswordInputBox.Password = defaultValue;
             }
             else
             {
-                // Обычный режим, показываем TextBox
                 PasswordInputBox.Visibility = Visibility.Collapsed;
                 InputTextBox.Visibility = Visibility.Visible;
                 InputTextBox.Text = defaultValue;
@@ -50,52 +54,67 @@ namespace NexusPoint.Windows
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            // Устанавливаем фокус и выделяем текст (если возможно)
             if (_isPasswordMode)
             {
-                PasswordInputBox.Focus();
-                // Выделение всего текста в PasswordBox не работает стандартно
+                // Установка фокуса через Dispatcher для надежности после загрузки
+                Dispatcher.BeginInvoke(new Action(() => PasswordInputBox.Focus()), System.Windows.Threading.DispatcherPriority.Input);
             }
             else
             {
-                InputTextBox.Focus();
-                InputTextBox.SelectAll();
+                Dispatcher.BeginInvoke(new Action(() => {
+                    InputTextBox.Focus();
+                    InputTextBox.SelectAll();
+                }), System.Windows.Threading.DispatcherPriority.Input);
             }
         }
 
-        // Нажатие Enter в TextBox
+        // Нажатие Enter в полях ввода переводит фокус на OK
         private void InputTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (!_isPasswordMode && e.Key == Key.Enter)
             {
-                OkButton.Focus();
+                MoveFocusToOkButton();
+                e.Handled = true; // Поглощаем Enter
             }
         }
 
-        // Нажатие Enter в PasswordBox
         private void PasswordInputBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (_isPasswordMode && e.Key == Key.Enter)
             {
-                OkButton.Focus();
+                MoveFocusToOkButton();
+                e.Handled = true; // Поглощаем Enter
             }
         }
+
+        // Перевод фокуса на кнопку OK (для срабатывания IsDefault)
+        private void MoveFocusToOkButton()
+        {
+            // Создаем запрос на перемещение фокуса
+            TraversalRequest request = new TraversalRequest(FocusNavigationDirection.Next);
+            // Ищем элемент с фокусом
+            UIElement elementWithFocus = Keyboard.FocusedElement as UIElement;
+            // Перемещаем фокус, если нашли элемент
+            elementWithFocus?.MoveFocus(request);
+            // Альтернативно, просто установить фокус:
+            // OkButton.Focus();
+        }
+
 
         // Нажатие OK
         private void OkButton_Click(object sender, RoutedEventArgs e)
         {
-            // Получаем текст из активного поля
             InputText = _isPasswordMode ? PasswordInputBox.Password : InputTextBox.Text;
-            this.DialogResult = true;
+            this.DialogResult = true; // Закрываем окно с результатом true
         }
 
-        // Нажатие Отмена
+        // Нажатие Отмена (срабатывает IsCancel="True" в XAML)
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            this.DialogResult = false;
+            this.DialogResult = false; // Закрываем окно с результатом false
         }
 
-        // --- Элемент PasswordBox нужно добавить в XAML ---
-        // Поле для хранения ссылки на PasswordBox из XAML
         private PasswordBox PasswordInputBox => (PasswordBox)this.FindName("InternalPasswordBox");
     }
 }

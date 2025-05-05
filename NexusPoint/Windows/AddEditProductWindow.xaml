@@ -66,8 +66,8 @@
 
         <!-- Кнопки -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="SaveButton" Content="Сохранить" Width="100" Height="30" IsDefault="True" Click="SaveButton_Click"/>
-            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True"/>
+            <Button x:Name="SaveButton" Content="Сохранить" Width="100" Height="35" IsDefault="True" Click="SaveButton_Click"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="35" Margin="10,0,0,0" IsCancel="True"/>
         </StackPanel>
 
     </Grid>

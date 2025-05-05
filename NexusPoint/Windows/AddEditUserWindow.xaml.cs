@@ -1,4 +1,5 @@
-﻿using NexusPoint.Data.Repositories;
+﻿using NexusPoint.BusinessLogic;
+using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
@@ -21,29 +22,29 @@ namespace NexusPoint.Windows
     /// </summary>
     public partial class AddEditUserWindow : Window
     {
-        private readonly UserRepository _userRepository;
-        private readonly User _originalUser; // null если режим добавления
+        // Заменяем репозиторий на менеджер
+        private readonly UserManager _userManager;
+        private readonly User _originalUser;
         private bool IsEditMode => _originalUser != null;
 
-        // Конструктор для добавления
-        public AddEditUserWindow()
+        // Конструктор для добавления (принимает менеджер)
+        public AddEditUserWindow(UserManager userManager)
         {
             InitializeComponent();
-            _userRepository = new UserRepository();
+            _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+            _originalUser = null;
             this.Title = "Добавление пользователя";
         }
 
-        // Конструктор для редактирования
-        public AddEditUserWindow(User userToEdit) : this()
+        // Конструктор для редактирования (принимает менеджер и пользователя)
+        public AddEditUserWindow(UserManager userManager, User userToEdit) : this(userManager) // Вызов основного конструктора
         {
-            _originalUser = userToEdit;
+            _originalUser = userToEdit ?? throw new ArgumentNullException(nameof(userToEdit));
             this.Title = "Редактирование пользователя";
 
-            // Заполняем поля
+            // Заполнение полей
             UsernameTextBox.Text = _originalUser.Username;
             FullNameTextBox.Text = _originalUser.FullName;
-
-            // Выбираем роль в ComboBox
             foreach (ComboBoxItem item in RoleComboBox.Items)
             {
                 if (item.Content.ToString() == _originalUser.Role)
@@ -53,11 +54,10 @@ namespace NexusPoint.Windows
                 }
             }
 
-            // Показываем подсказку про пароль
+            // UI для пароля в режиме редактирования
             PasswordInfoText.Visibility = Visibility.Visible;
-            // Метки обязательности пароля убираем (или меняем текст)
-            PasswordLabel.Content = "_Пароль:";
-            ConfirmPasswordLabel.Content = "_Подтвердите пароль:";
+            PasswordLabel.Content = "_Пароль:"; // Убираем *
+            ConfirmPasswordLabel.Content = "_Подтвердите пароль:"; // Убираем *
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -65,7 +65,7 @@ namespace NexusPoint.Windows
             UsernameTextBox.Focus();
         }
 
-        // Кнопка Сохранить
+        // Кнопка Сохранить (обновлено)
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
             ClearError();
@@ -73,61 +73,30 @@ namespace NexusPoint.Windows
             // 1. Получаем данные из полей
             string username = UsernameTextBox.Text.Trim();
             string fullName = FullNameTextBox.Text.Trim();
-            string password = PasswordBox.Password; // Пароль получаем как есть
+            string password = PasswordBox.Password;
             string confirmPassword = ConfirmPasswordBox.Password;
             string selectedRole = (RoleComboBox.SelectedItem as ComboBoxItem)?.Content.ToString();
 
-            // 2. Валидация
-            if (string.IsNullOrWhiteSpace(username))
-            {
-                ShowError("Логин (ШК) не может быть пустым.");
-                UsernameTextBox.Focus();
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(fullName))
-            {
-                ShowError("ФИО не может быть пустым.");
-                FullNameTextBox.Focus();
-                return;
-            }
-            if (string.IsNullOrEmpty(selectedRole))
-            {
-                ShowError("Выберите роль пользователя.");
-                RoleComboBox.Focus();
-                return;
-            }
+            // 2. Базовая валидация (остается здесь)
+            if (string.IsNullOrWhiteSpace(username)) { ShowError("Логин (ШК) не может быть пустым."); UsernameTextBox.Focus(); return; }
+            if (string.IsNullOrWhiteSpace(fullName)) { ShowError("ФИО не может быть пустым."); FullNameTextBox.Focus(); return; }
+            if (string.IsNullOrEmpty(selectedRole)) { ShowError("Выберите роль пользователя."); RoleComboBox.Focus(); return; }
 
-            // Проверка уникальности логина (кроме себя в режиме ред.)
-            var existingUser = _userRepository.GetUserByUsername(username);
-            if (existingUser != null && (!IsEditMode || existingUser.UserId != _originalUser.UserId))
-            {
-                ShowError($"Пользователь с логином '{username}' уже существует.");
-                UsernameTextBox.Focus();
-                UsernameTextBox.SelectAll();
-                return;
-            }
-
-            // Валидация пароля
+            // Валидация паролей (только совпадение, остальное - в менеджере)
             bool updatePassword = false;
-            if (!string.IsNullOrEmpty(password)) // Если поле пароля не пустое, значит пытаемся установить/сменить
+            if (!string.IsNullOrEmpty(password)) // Если пароль введен (попытка установить/сменить)
             {
-                if (password.Length < 4) // Пример минимальной длины пароля
-                {
-                    ShowError("Пароль должен содержать не менее 4 символов.");
-                    PasswordBox.Focus();
-                    return;
-                }
                 if (password != confirmPassword)
                 {
                     ShowError("Пароли не совпадают.");
-                    ConfirmPasswordBox.Focus();
-                    ConfirmPasswordBox.SelectAll();
+                    ConfirmPasswordBox.Focus(); ConfirmPasswordBox.SelectAll();
                     return;
                 }
-                updatePassword = true; // Пароли совпали, будем обновлять
+                updatePassword = true; // Пароли совпали, передадим его менеджеру
             }
-            else if (!IsEditMode) // Если это режим ДОБАВЛЕНИЯ и пароль пустой
+            else if (!IsEditMode) // Обязателен при создании
             {
+                // Эта проверка также есть в менеджере, но оставим и здесь для UI
                 ShowError("Пароль обязателен при создании нового пользователя.");
                 PasswordBox.Focus();
                 return;
@@ -135,65 +104,37 @@ namespace NexusPoint.Windows
 
             // 3. Создание/обновление объекта User
             User userToSave;
-            if (IsEditMode)
-            {
-                userToSave = _originalUser;
-            }
-            else
-            {
-                userToSave = new User();
-            }
+            if (IsEditMode) { userToSave = _originalUser; } // Берем существующий
+            else { userToSave = new User(); } // Создаем новый
 
             userToSave.Username = username;
             userToSave.FullName = fullName;
             userToSave.Role = selectedRole;
-            // HashedPassword будет установлен при вызове AddUser или UpdateUserPassword
+            // HashedPassword будет установлен менеджером
 
-            // 4. Сохранение в БД
-            try
+            // 4. Сохранение через UserManager
+            bool success;
+            if (IsEditMode)
             {
-                bool success;
-                if (IsEditMode)
-                {
-                    // Сначала обновляем основные данные
-                    success = _userRepository.UpdateUser(userToSave);
-                    if (success && updatePassword) // Если нужно обновить пароль
-                    {
-                        success = _userRepository.UpdateUserPassword(userToSave.UserId, password);
-                    }
-                }
-                else // Режим добавления
-                {
-                    int newId = _userRepository.AddUser(userToSave, password); // Сразу передаем пароль
-                    success = newId > 0;
-                }
-
-                if (success)
-                {
-                    this.DialogResult = true; // Успех
-                }
-                else
-                {
-                    ShowError("Не удалось сохранить данные пользователя.");
-                }
+                // Передаем пользователя и опционально новый пароль
+                success = _userManager.UpdateUser(userToSave, updatePassword ? password : null);
             }
-            catch (Exception ex)
+            else // Режим добавления
             {
-                ShowError($"Ошибка сохранения: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Save user error: {ex}");
+                // Передаем пользователя и обязательный пароль
+                success = _userManager.AddUser(userToSave, password);
             }
+
+            // 5. Закрытие окна при успехе
+            if (success)
+            {
+                this.DialogResult = true;
+            }
+            // Сообщения об ошибках (включая валидацию длины пароля и уникальность) будут показаны менеджером
         }
 
-        // Показ/Скрытие ошибки
-        private void ShowError(string message)
-        {
-            ErrorText.Text = message;
-            ErrorText.Visibility = Visibility.Visible;
-        }
-        private void ClearError()
-        {
-            ErrorText.Text = string.Empty;
-            ErrorText.Visibility = Visibility.Collapsed;
-        }
+        // Показ/Скрытие ошибки (остаются)
+        private void ShowError(string message) { ErrorText.Text = message; ErrorText.Visibility = Visibility.Visible; }
+        private void ClearError() { ErrorText.Text = string.Empty; ErrorText.Visibility = Visibility.Collapsed; }
     }
 }

@@ -16,254 +16,214 @@ using System.Windows.Shapes;
 
 namespace NexusPoint.Windows
 {
-    /// <summary>
-    /// Логика взаимодействия для PaymentDialog.xaml
-    /// </summary>
     public partial class PaymentDialog : Window
     {
-        private readonly decimal _totalAmount; // Сумма к оплате
+        private readonly decimal _totalAmount;
+        private CultureInfo _culture = CultureInfo.CurrentCulture; // Используем CurrentCulture
 
-        // Публичные свойства для получения результата
-        public string SelectedPaymentType { get; private set; } = "Cash"; // По умолчанию
+        public string SelectedPaymentType { get; private set; } = "Cash"; // Default
         public decimal CashPaid { get; private set; } = 0m;
         public decimal CardPaid { get; private set; } = 0m;
         public decimal Change { get; private set; } = 0m;
-
 
         public PaymentDialog(decimal totalAmount)
         {
             InitializeComponent();
             _totalAmount = totalAmount;
+            // Убедимся, что сумма не отрицательная
+            if (_totalAmount < 0) _totalAmount = 0;
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            CultureInfo culture = CultureInfo.CurrentCulture; // Или GetCultureInfo("ru-RU")
-            TotalAmountText.Text = _totalAmount.ToString("C", culture);
-
-            // Изначально выбран Cash, предустанавливаем сумму
-            CashReceivedTextBox.Text = _totalAmount.ToString("N2", culture); // Предзаполняем поле ввода суммой чека
+            TotalAmountText.Text = _totalAmount.ToString("C", _culture);
+            CashReceivedTextBox.Text = _totalAmount.ToString("N2", _culture); // Use "N2" for numeric input formatting
             CashReceivedTextBox.Focus();
             CashReceivedTextBox.SelectAll();
-            UpdatePaymentDetails(); // Рассчитать сдачу
+            UpdatePaymentDetails();
         }
 
-        // Обработка смены типа оплаты
         private void PaymentType_Changed(object sender, RoutedEventArgs e)
         {
-            if (CashInputPanel == null || ChangePanel == null || CardPaymentPanel == null || OkButton == null || CashRadioButton == null)
-            {
-                return;
-            }
+            // Проверка, загрузились ли элементы XAML
+            if (CashInputPanel == null || ChangePanel == null || CardPaymentPanel == null || OkButton == null || CashRadioButton == null) return;
+
+            string newPaymentType = "Cash"; // Default
 
             if (CashRadioButton.IsChecked == true)
             {
-                SelectedPaymentType = "Cash";
+                newPaymentType = "Cash";
                 CashInputPanel.Visibility = Visibility.Visible;
                 ChangePanel.Visibility = Visibility.Visible;
                 CardPaymentPanel.Visibility = Visibility.Collapsed;
-
-                if (this.IsLoaded) CashReceivedTextBox.Focus();
+                // Устанавливаем фокус только если окно уже загружено
+                if (this.IsLoaded) { Dispatcher.BeginInvoke(new Action(() => CashReceivedTextBox.Focus()), System.Windows.Threading.DispatcherPriority.Input); }
             }
             else if (CardRadioButton.IsChecked == true)
             {
-                SelectedPaymentType = "Card";
-                CashInputPanel.Visibility = Visibility.Collapsed; // Скрываем ввод наличных
+                newPaymentType = "Card";
+                CashInputPanel.Visibility = Visibility.Collapsed;
                 ChangePanel.Visibility = Visibility.Collapsed;
                 CardPaymentPanel.Visibility = Visibility.Collapsed;
-                if (this.IsLoaded) OkButton.Focus();
+                if (this.IsLoaded) { Dispatcher.BeginInvoke(new Action(() => OkButton.Focus()), System.Windows.Threading.DispatcherPriority.Input); }
             }
             else if (MixedRadioButton.IsChecked == true)
             {
-                SelectedPaymentType = "Mixed";
+                newPaymentType = "Mixed";
                 CashInputPanel.Visibility = Visibility.Visible;
                 ChangePanel.Visibility = Visibility.Collapsed;
                 CardPaymentPanel.Visibility = Visibility.Visible;
-                if (this.IsLoaded) CashReceivedTextBox.Focus();
+                if (this.IsLoaded) { Dispatcher.BeginInvoke(new Action(() => CashReceivedTextBox.Focus()), System.Windows.Threading.DispatcherPriority.Input); }
             }
-            if (this.IsLoaded)
+
+            if (SelectedPaymentType != newPaymentType)
             {
-                UpdatePaymentDetails();
-                ClearError();
+                SelectedPaymentType = newPaymentType;
+                // Пересчитываем детали только если тип изменился и окно загружено
+                if (this.IsLoaded)
+                {
+                    UpdatePaymentDetails();
+                    ClearError(); // Сбрасываем ошибку при смене типа
+                }
             }
         }
 
-        // Валидация ввода в поле Наличные (только цифры и один разделитель)
         private void CashReceivedTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
             TextBox textBox = sender as TextBox;
             string currentText = textBox.Text.Insert(textBox.CaretIndex, e.Text);
-            string decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
-
-            // Паттерн: начало строки (^), ноль или больше цифр (\d*),
-            // необязательно десятичный разделитель (\.{decimalSeparator}?),
-            // ноль или больше цифр (\d*), конец строки ($)
-            // Используем Regex.Escape для экранирования разделителя, если это точка
+            string decimalSeparator = _culture.NumberFormat.NumberDecimalSeparator;
             string pattern = $@"^\d*({Regex.Escape(decimalSeparator)}?\d*)?$";
-
             Regex regex = new Regex(pattern);
-
-            // Если новый текст не соответствует паттерну, отменяем ввод
             if (!regex.IsMatch(currentText))
             {
                 e.Handled = true;
             }
         }
 
-        // Обработка изменения текста в поле Наличные
         private void CashReceivedTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            UpdatePaymentDetails();
+            // Вызываем UpdatePaymentDetails только если окно загружено, чтобы избежать ошибок при инициализации
+            if (this.IsLoaded)
+            {
+                UpdatePaymentDetails();
+            }
         }
 
-        // Пересчет сдачи / доплаты картой
         private void UpdatePaymentDetails()
         {
-            ClearError(); // Сбросить ошибки при любом изменении
-
-            CultureInfo culture = CultureInfo.CurrentCulture;
+            ClearError();
             decimal cashReceived = 0m;
 
-            // Пытаемся получить сумму из TextBox
-            if (CashInputPanel.Visibility == Visibility.Visible &&
-               decimal.TryParse(CashReceivedTextBox.Text, NumberStyles.Any, culture, out decimal parsedCash))
+            if (CashInputPanel.Visibility == Visibility.Visible)
             {
-                cashReceived = parsedCash;
-            }
-            else if (CashInputPanel.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(CashReceivedTextBox.Text))
-            {
-                // Если поле видимо, но парсинг не удался (например, вводится некорректный символ)
-                ShowError("Некорректный формат суммы наличных.");
-                ChangeAmountText.Text = "---";
-                CardPaymentAmountText.Text = "---";
-                return; // Прерываем расчет
-            }
-
-
-            Change = 0m;
-            CardPaid = 0m; // Сбрасываем перед расчетом
-
-            if (SelectedPaymentType == "Cash")
-            {
-                if (cashReceived >= _totalAmount)
+                if (decimal.TryParse(CashReceivedTextBox.Text, NumberStyles.Any, _culture, out decimal parsedCash))
                 {
-                    Change = cashReceived - _totalAmount;
-                    CashPaid = _totalAmount; // Оплачено наличными вся сумма
+                    cashReceived = parsedCash;
                 }
-                else
+                else if (!string.IsNullOrWhiteSpace(CashReceivedTextBox.Text))
                 {
-                    Change = 0m; // Недостаточно средств
-                    CashPaid = cashReceived; // Оплачено только то, что внесено
-                    ShowError("Недостаточно наличных.");
-                }
-                ChangeAmountText.Text = Change.ToString("C", culture);
-            }
-            else if (SelectedPaymentType == "Card")
-            {
-                CashPaid = 0m;
-                CardPaid = _totalAmount; // Вся сумма картой
-                Change = 0m;
-            }
-            else if (SelectedPaymentType == "Mixed")
-            {
-                if (cashReceived >= _totalAmount)
-                {
-                    // Если наличных хватает или больше, это по сути оплата наличными
-                    CashPaid = _totalAmount;
-                    CardPaid = 0m;
-                    Change = cashReceived - _totalAmount; // Возвращаем сдачу наличными
-                    // Можно предложить переключиться на тип "Наличные", но пока оставим так
-                    ShowError("Наличных достаточно, оплата картой не требуется. Будет выдана сдача.");
-                    CardPaymentAmountText.Text = CardPaid.ToString("C", culture);
-                }
-                else if (cashReceived < 0) // Отрицательную сумму не принимаем
-                {
-                    ShowError("Сумма наличных не может быть отрицательной.");
+                    ShowError("Некорректный формат суммы наличных.");
+                    ChangeAmountText.Text = "---";
                     CardPaymentAmountText.Text = "---";
+                    OkButton.IsEnabled = false; // Блокируем кнопку OK
                     return;
                 }
-                else
-                {
-                    // Наличных недостаточно, остаток картой
-                    CashPaid = cashReceived;
-                    CardPaid = _totalAmount - cashReceived;
-                    Change = 0m; // Сдачи нет
-                    CardPaymentAmountText.Text = CardPaid.ToString("C", culture);
-                }
             }
+
+            // Сбрасываем значения перед расчетом
+            CashPaid = 0m;
+            CardPaid = 0m;
+            Change = 0m;
+            bool enableOkButton = true; // Флаг для кнопки OK
+
+            switch (SelectedPaymentType)
+            {
+                case "Cash":
+                    if (cashReceived >= _totalAmount)
+                    {
+                        Change = cashReceived - _totalAmount;
+                        CashPaid = _totalAmount;
+                    }
+                    else
+                    {
+                        ShowError("Недостаточно наличных.");
+                        CashPaid = cashReceived; // Сохраняем сколько внесено
+                        enableOkButton = false; // Нельзя завершить оплату
+                    }
+                    ChangeAmountText.Text = Change.ToString("C", _culture);
+                    break;
+
+                case "Card":
+                    CardPaid = _totalAmount;
+                    break;
+
+                case "Mixed":
+                    if (cashReceived < 0)
+                    {
+                        ShowError("Сумма наличных не может быть отрицательной.");
+                        enableOkButton = false;
+                        CardPaymentAmountText.Text = "---";
+                    }
+                    else if (cashReceived >= _totalAmount)
+                    {
+                        CashPaid = _totalAmount; // Оплачено все наличными
+                        Change = cashReceived - _totalAmount; // Будет сдача
+                        ShowError("Наличных достаточно, оплата картой не требуется.");
+                        // enableOkButton остается true, но логика ОК должна это учесть
+                        CardPaymentAmountText.Text = 0m.ToString("C", _culture); // К оплате картой 0
+                    }
+                    else
+                    {
+                        CashPaid = cashReceived;
+                        CardPaid = _totalAmount - cashReceived;
+                        CardPaymentAmountText.Text = CardPaid.ToString("C", _culture);
+                    }
+                    break;
+            }
+            OkButton.IsEnabled = enableOkButton; // Управляем кнопкой OK
         }
 
-
-        // Нажатие OK
         private void OkButton_Click(object sender, RoutedEventArgs e)
         {
-            UpdatePaymentDetails(); // Пересчитать на всякий случай
+            UpdatePaymentDetails(); // Финальный пересчет и проверка
 
-            // Проверка валидности перед закрытием
-            if (SelectedPaymentType == "Cash" && CashPaid < _totalAmount)
+            if (!OkButton.IsEnabled) // Если кнопка заблокирована проверками в UpdatePaymentDetails
             {
-                MessageBox.Show("Недостаточно наличных для завершения оплаты.", "Ошибка оплаты", MessageBoxButton.OK, MessageBoxImage.Warning);
-                CashReceivedTextBox.Focus();
+                // Ошибка уже должна быть показана
+                if (CashInputPanel.IsVisible) CashReceivedTextBox.Focus();
                 return;
             }
-            if (SelectedPaymentType == "Mixed" && (CashPaid + CardPaid) < _totalAmount)
-            {
-                MessageBox.Show("Недостаточно средств для завершения смешанной оплаты.", "Ошибка оплаты", MessageBoxButton.OK, MessageBoxImage.Warning);
-                CashReceivedTextBox.Focus();
-                return;
-            }
-            // Дополнительная проверка для смешанной оплаты, где наличных больше чем надо
+
+            // Особый случай: Смешанная оплата, но наличных хватило
             if (SelectedPaymentType == "Mixed" && CashPaid >= _totalAmount)
             {
-                // Если пользователь все же нажал OK при смешанной оплате, но внес достаточно наличных
-                // Мы рассчитали CardPaid = 0 и Change > 0
-                // Сохраняем как смешанную оплату с нулевой суммой по карте и сдачей
-                // или можно принудительно сменить тип на Cash? Решаем здесь.
-                // Пока оставляем как есть: сохранится как Mixed с CardPaid=0 и будет сдача.
+                // Пользователь подтвердил оплату, хотя можно было бы оплатить только наличными.
+                // Сохраняем как 'Mixed', CardPaid будет 0, будет рассчитана сдача.
+                // (Альтернатива: принудительно сменить SelectedPaymentType на "Cash" здесь)
             }
 
-
-            // Если оплата картой (Card или Mixed с CardPaid > 0)
+            // Имитация пин-пада
             if (SelectedPaymentType == "Card" || (SelectedPaymentType == "Mixed" && CardPaid > 0))
             {
-                // --- ИМИТАЦИЯ РАБОТЫ С ПИН-ПАДОМ ---
-                // В реальном приложении здесь был бы вызов SDK банковского терминала
                 MessageBoxResult pinpadResult = MessageBox.Show($"Имитация банковского терминала:\nК оплате картой: {CardPaid:C}\n\nОперация прошла успешно?",
                                                                 "Банковский терминал", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
                 if (pinpadResult == MessageBoxResult.No)
                 {
-                    ShowError("Операция по карте отклонена банком.");
-                    return; // Не закрываем окно, даем возможность изменить способ оплаты
+                    ShowError("Операция по карте отклонена.");
+                    OkButton.IsEnabled = true; // Оставляем кнопку активной для повтора/смены типа
+                    return;
                 }
-                // Если Yes - продолжаем
             }
 
-            // Все проверки пройдены, тип оплаты и суммы рассчитаны в UpdatePaymentDetails()
-            this.DialogResult = true; // Устанавливаем результат и закрываем
+            this.DialogResult = true; // Закрываем окно
         }
 
-        // Нажатие Отмена
-        private void CancelButton_Click(object sender, RoutedEventArgs e)
-        {
-            this.DialogResult = false;
-        }
+        private void CancelButton_Click(object sender, RoutedEventArgs e) => this.DialogResult = false;
 
-        // Показ ошибки
-        private void ShowError(string message)
-        {
-            PaymentErrorText.Text = message;
-            PaymentErrorText.Visibility = Visibility.Visible;
-        }
+        private void ShowError(string message) { PaymentErrorText.Text = message; PaymentErrorText.Visibility = Visibility.Visible; }
+        private void ClearError() { PaymentErrorText.Text = string.Empty; PaymentErrorText.Visibility = Visibility.Collapsed; }
 
-        // Скрытие ошибки
-        private void ClearError()
-        {
-            PaymentErrorText.Text = string.Empty;
-            PaymentErrorText.Visibility = Visibility.Collapsed;
-        }
-
-        // Обработка горячих клавиш F7, F8, F9
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
@@ -271,18 +231,11 @@ namespace NexusPoint.Windows
             {
                 switch (e.Key)
                 {
-                    case Key.F7:
-                        CashRadioButton.IsChecked = true;
-                        e.Handled = true;
-                        break;
-                    case Key.F8:
-                        CardRadioButton.IsChecked = true;
-                        e.Handled = true;
-                        break;
-                    case Key.F9:
-                        MixedRadioButton.IsChecked = true;
-                        e.Handled = true;
-                        break;
+                    case Key.F7: CashRadioButton.IsChecked = true; e.Handled = true; break;
+                    case Key.F8: CardRadioButton.IsChecked = true; e.Handled = true; break;
+                    case Key.F9: MixedRadioButton.IsChecked = true; e.Handled = true; break;
+                        // Обработка Enter уже делается через IsDefault на кнопке OK
+                        // Обработка Esc уже делается через IsCancel на кнопке Cancel
                 }
             }
         }

@@ -40,7 +40,7 @@
                 <TextBox x:Name="ShiftNumberTextBox" Width="80" Margin="5,0" VerticalContentAlignment="Center"
                          KeyDown="SearchTextBox_KeyDown"/>
                 <Button x:Name="FindCheckButton" Content="Найти чек" Width="100" Margin="15,0,5,0" Click="FindCheckButton_Click"/>
-                <Button x:Name="PrintLastCheckCopyButton" Content="Копия последнего" Width="120" Margin="0,0,0,0" Click="PrintLastCheckCopyButton_Click"/>
+                <Button x:Name="PrintLastCheckCopyButton" Content="Копия последнего" Width="150" Margin="0,0,0,0" Click="PrintLastCheckCopyButton_Click"/>
             </StackPanel>
         </Border>
 
@@ -69,7 +69,7 @@
         <!-- Кнопки действий для выбранного чека -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" x:Name="ActionPanel" Margin="0,0,0,10">
             <Button x:Name="PrintCopyButton" Content="Печать копии" Width="120" Margin="0,0,10,0" Click="PrintCopyButton_Click" IsEnabled="False"/>
-            <Button x:Name="PrintTovarnyCheckButton" Content="Печать товарного чека" Width="160" Margin="0,0,10,0" Click="PrintTovarnyCheckButton_Click" IsEnabled="False"/>
+            <Button x:Name="PrintTovarnyCheckButton" Content="Печать товарного чека" Width="180" Margin="0,0,10,0" Click="PrintTovarnyCheckButton_Click" IsEnabled="False"/>
             <Button x:Name="PrintDiscountDetailsButton" Content="Печать скидок" Width="120" Click="PrintDiscountDetailsButton_Click" IsEnabled="False"/>
         </StackPanel>
 
@@ -77,7 +77,7 @@
         <TextBlock Grid.Row="3" x:Name="StatusText" Foreground="Red" Margin="0,5"/>
 
         <!-- Кнопка Закрыть -->
-        <Button Grid.Row="4" Content="Закрыть" Width="100" Height="30" HorizontalAlignment="Right" IsCancel="True"/>
+        <Button Grid.Row="4" Content="Закрыть" Width="100" Height="35" HorizontalAlignment="Right" IsCancel="True"/>
 
     </Grid>
 

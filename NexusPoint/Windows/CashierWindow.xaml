@@ -102,16 +102,31 @@
                 <StackPanel>
                     <Grid Margin="0,5">
                         <TextBlock Text="Подытог:" FontSize="16"/>
-                        <TextBlock x:Name="SubtotalText" Text="0.00" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                        <!-- Старый вариант: -->
+                        <!-- <TextBlock x:Name="SubtotalText" Text="0.00" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right"/> -->
+                        <!-- НОВЫЙ ВАРИАНТ С BINDING: -->
+                        <TextBlock x:Name="SubtotalText"
+                                   Text="{Binding Subtotal, StringFormat=C, ConverterCulture=ru-RU}"
+                                   FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                     </Grid>
                     <Grid Margin="0,5">
                         <TextBlock Text="Скидка:" FontSize="16"/>
-                        <TextBlock x:Name="DiscountText" Text="0.00" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                        <!-- Старый вариант: -->
+                        <!-- <TextBlock x:Name="DiscountText" Text="0.00" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right"/> -->
+                        <!-- НОВЫЙ ВАРИАНТ С BINDING: -->
+                        <TextBlock x:Name="DiscountText"
+                                   Text="{Binding TotalDiscount, StringFormat=C, ConverterCulture=ru-RU}"
+                                   FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                     </Grid>
                     <Separator Margin="0,10"/>
                     <Grid Margin="0,5">
                         <TextBlock Text="ИТОГО:" FontSize="22" FontWeight="Bold"/>
-                        <TextBlock x:Name="TotalAmountText" Text="0.00" FontSize="22" FontWeight="Bold" HorizontalAlignment="Right"/>
+                        <!-- Старый вариант: -->
+                        <!-- <TextBlock x:Name="TotalAmountText" Text="0.00" FontSize="22" FontWeight="Bold" HorizontalAlignment="Right"/> -->
+                        <!-- НОВЫЙ ВАРИАНТ С BINDING: -->
+                        <TextBlock x:Name="TotalAmountText"
+                                   Text="{Binding TotalAmount, StringFormat=C, ConverterCulture=ru-RU}"
+                                   FontSize="22" FontWeight="Bold" HorizontalAlignment="Right"/>
                     </Grid>
                 </StackPanel>
             </Border>
