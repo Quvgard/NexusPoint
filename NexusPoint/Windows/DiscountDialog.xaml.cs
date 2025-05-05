@@ -13,6 +13,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 
 namespace NexusPoint.Windows
 {
@@ -37,17 +38,50 @@ namespace NexusPoint.Windows
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             OriginalAmountText.Text = _originalTotalAmount.ToString("C");
-            DiscountValueTextBox.Focus();
-            UpdateCalculations(); // Первичный расчет (с 0)
+            // Фокус на первый RadioButton по умолчанию
+            PercentageRadioButton.Focus();
+            UpdateCalculations();
         }
+
+        // --- НОВЫЙ: Обработка стрелок на RadioButton ---
+        private void RadioButton_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Left || e.Key == Key.Up)
+            {
+                PercentageRadioButton.IsChecked = true;
+                PercentageRadioButton.Focus();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Right || e.Key == Key.Down)
+            {
+                AmountRadioButton.IsChecked = true;
+                AmountRadioButton.Focus();
+                e.Handled = true;
+            }
+            // Если нажать Enter на RadioButton, он перейдет к следующему по TabIndex (TextBox)
+        }
+
+        // --- НОВЫЙ: Обработка Enter в поле ввода значения ---
+        private void ValueTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                // Переводим фокус на кнопку OK, чтобы сработало IsDefault=true
+                OkButton.Focus();
+                // Можно также вызвать метод сохранения напрямую, если нужно
+                // SaveButton_Click(OkButton, new RoutedEventArgs());
+                e.Handled = true; // Поглощаем Enter
+            }
+        }
+
 
         // Смена типа скидки
         private void DiscountType_Changed(object sender, RoutedEventArgs e)
         {
-            if (PercentageRadioButton == null || AmountRadioButton == null) return; // Защита от null при загрузке
+            if (PercentageRadioButton == null || AmountRadioButton == null) return;
 
             IsPercentage = PercentageRadioButton.IsChecked == true;
-            ValueSuffixText.Text = IsPercentage ? "%" : CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol; // Показываем % или знак валюты
+            ValueSuffixText.Text = IsPercentage ? "%" : CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
             UpdateCalculations();
         }
 

@@ -116,6 +116,7 @@ namespace NexusPoint.Windows
         private DispatcherTimer _inactivityTimer; // Таймер для автоблокировки
         private const int InactivityTimeoutMinutes = 15; // Время неактивности в минутах
         private bool _isLocked = false; // Флаг состояния блокировки
+        private bool _isManualDiscountApplied = false;
 
         public CashierWindow(User user)
         {
@@ -454,6 +455,7 @@ namespace NexusPoint.Windows
 
                 // Обновляем информацию о последнем товаре и итоги
                 LastItemInfoText.Text = $"Добавлено: {product.Name}\nЦена: {product.Price:C}\nКод: {product.ProductCode}";
+                _isManualDiscountApplied = false;
                 UpdateTotals();
             }
             catch (Exception ex)
@@ -493,6 +495,7 @@ namespace NexusPoint.Windows
             _subtotal = 0m;
             _totalDiscount = 0m;
             _totalAmount = 0m;
+            _isManualDiscountApplied = false;
             UpdateTotals(); // Обновляем UI и состояние кнопок
             LastItemInfoText.Text = "-";
             ItemInputTextBox.Clear();
@@ -537,6 +540,7 @@ namespace NexusPoint.Windows
 
         private async void PaymentButton_Click(object sender, RoutedEventArgs e)
         {
+            // 1. --- Базовые проверки ---
             if (!CurrentCheckItems.Any())
             {
                 ShowTemporaryStatusMessage("Нечего оплачивать.", isError: true);
@@ -547,124 +551,332 @@ namespace NexusPoint.Windows
                 ShowTemporaryStatusMessage("Ошибка: Смена не открыта!", isError: true);
                 return;
             }
-
-            // --- ПРИМЕНЯЕМ ВСЕ АВТОМАТИЧЕСКИЕ СКИДКИ ---
-            try
+            if (_isLocked) // Нельзя оплачивать, если заблокировано
             {
-                // Создаем список базовых CheckItem
-                List<CheckItem> itemsForDiscountCalc = CurrentCheckItems
-                   .Select(civ => new CheckItem
-                   { // Создаем новые CheckItem, копируя данные
-                       ProductId = civ.ProductId,
-                       Quantity = civ.Quantity,
-                       PriceAtSale = civ.PriceAtSale,
-                       // Изначально скидка 0, ItemTotal = Quantity * PriceAtSale
-                       DiscountAmount = 0,
-                       ItemTotalAmount = civ.Quantity * civ.PriceAtSale
-                       // OriginalItem не нужен калькулятору
-                   }).ToList();
-
-                // Вызываем основной метод калькулятора
-                decimal totalAutoDiscount = DiscountCalculator.ApplyAllAutoDiscounts(itemsForDiscountCalc);
-
-                // Обновляем CurrentCheckItems на основе результатов
-                bool discountsChanged = false;
-                for (int i = 0; i < CurrentCheckItems.Count; i++)
-                {
-                    // Сравниваем ДО и ПОСЛЕ расчета
-                    if (CurrentCheckItems[i].DiscountAmount != itemsForDiscountCalc[i].DiscountAmount ||
-                        CurrentCheckItems[i].AppliedDiscountId != itemsForDiscountCalc[i].AppliedDiscountId)
-                    {
-                        // ПРИМЕНЯЕМ изменения к объектам CheckItemView
-                        CurrentCheckItems[i].DiscountAmount = itemsForDiscountCalc[i].DiscountAmount;
-                        CurrentCheckItems[i].AppliedDiscountId = itemsForDiscountCalc[i].AppliedDiscountId;
-                        // ItemTotalAmount в CheckItemView пересчитается сам через INotifyPropertyChanged
-                        discountsChanged = true;
-                    }
-                }
-
-                if (discountsChanged)
-                {
-                    UpdateTotals(); // Обновляем общие итоги
-                    ShowTemporaryStatusMessage($"Применены авто-скидки: {totalAutoDiscount:C}", isInfo: true);
-                    await Task.Delay(1000); // Даем увидеть
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка применения скидок:\n{ex.Message}", "Ошибка скидок", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowTemporaryStatusMessage("Станция заблокирована. Разблокируйте для оплаты.", isError: true);
+                return;
             }
 
-            // 1. Создаем и показываем диалог оплаты
-            var paymentDialog = new PaymentDialog(_totalAmount); // Передаем сумму к оплате
-            if (paymentDialog.ShowDialog() == true)
+            // 2. --- Применение автоматических скидок и подарков (если не было ручной) ---
+            DiscountCalculationResult discountResult = null;
+            // Инициализируем список для сохранения текущим состоянием UI
+            List<CheckItem> itemsToSave = CurrentCheckItems.Select(civ => new CheckItem
             {
-                // 2. Оплата подтверждена, получаем детали
-                string paymentType = paymentDialog.SelectedPaymentType;
-                decimal cashPaid = paymentDialog.CashPaid;
-                decimal cardPaid = paymentDialog.CardPaid;
-                decimal change = paymentDialog.Change; // Сдача
+                ProductId = civ.ProductId,
+                Quantity = civ.Quantity,
+                PriceAtSale = civ.PriceAtSale,
+                DiscountAmount = civ.DiscountAmount,
+                AppliedDiscountId = civ.AppliedDiscountId,
+                ItemTotalAmount = civ.CalculatedItemTotalAmount
+            }).ToList();
 
-                // 3. Формируем объект чека
-                var checkToSave = new Check
-                {
-                    ShiftId = CurrentShift.ShiftId,
-                    // CheckNumber нужно получить из репозитория ПЕРЕД вставкой
-                    CheckNumber = _checkRepository.GetNextCheckNumber(CurrentShift.ShiftId), // Получаем следующий номер
-                    Timestamp = DateTime.Now,
-                    UserId = CurrentUser.UserId,
-                    TotalAmount = _totalAmount,
-                    PaymentType = paymentType,
-                    CashPaid = cashPaid,
-                    CardPaid = cardPaid,
-                    DiscountAmount = _totalDiscount,
-                    IsReturn = false, // Это продажа
-                    OriginalCheckId = null,
-                    Items = CurrentCheckItems.Select(civ => new CheckItem
-                    { // Копируем финальные данные
-                        ProductId = civ.ProductId,
-                        Quantity = civ.Quantity,
-                        PriceAtSale = civ.PriceAtSale,
-                        DiscountAmount = civ.DiscountAmount,
-                        AppliedDiscountId = civ.AppliedDiscountId,
-                        ItemTotalAmount = civ.CalculatedItemTotalAmount // Берем итоговую сумму
-                    }).ToList()
-                };
-
+            if (!_isManualDiscountApplied) // <<--- ПРОВЕРЯЕМ ФЛАГ РУЧНОЙ СКИДКИ
+            {
+                Console.WriteLine("Applying automatic discounts...");
                 try
                 {
-                    // 4. Сохраняем чек (репозиторий обработает транзакцию и остатки)
-                    var savedCheck = _checkRepository.AddCheck(checkToSave);
+                    ShowTemporaryStatusMessage("Применение скидок...", isInfo: true, durationSeconds: 10);
 
-                    // 5. "Печать" чека (пока просто сообщение)
-                    string printMessage = $"Чек №{savedCheck.CheckNumber} сохранен.\n";
-                    printMessage += $"Тип оплаты: {paymentType}\n";
-                    if (paymentType == "Cash" || paymentType == "Mixed") printMessage += $"Получено наличными: {cashPaid:C}\n";
-                    if (paymentType == "Card" || paymentType == "Mixed") printMessage += $"Оплачено картой: {cardPaid:C}\n";
-                    if (change > 0) printMessage += $"Сдача: {change:C}\n";
-                    printMessage += $"ИТОГО: {savedCheck.TotalAmount:C}";
+                    // Создаем список базовых CheckItem из текущих CheckItemView для передачи калькулятору
+                    List<CheckItem> originalItemsForCalc = CurrentCheckItems
+                        .Select(civ => new CheckItem
+                        {
+                            ProductId = civ.ProductId,
+                            Quantity = civ.Quantity,
+                            PriceAtSale = civ.PriceAtSale,
+                            DiscountAmount = 0, // Сбрасываем скидку перед авто-расчетом
+                            AppliedDiscountId = null,
+                            ItemTotalAmount = civ.Quantity * civ.PriceAtSale // Начальная сумма
+                        }).ToList();
 
-                    PrinterService.Print($"Чек №{savedCheck.CheckNumber}", printMessage);
+                    // Вызываем основной метод калькулятора в фоновом потоке
+                    discountResult = await Task.Run(() => DiscountCalculator.ApplyAllAutoDiscounts(originalItemsForCalc));
 
-                    // 6. Очищаем текущий чек
-                    ClearCheck();
-                }
-                catch (InvalidOperationException invEx) // Ошибка обновления остатков
-                {
-                    MessageBox.Show($"Не удалось сохранить чек:\n{invEx.Message}", "Ошибка остатков", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    // Чек не очищаем, чтобы можно было исправить
+                    // --- Обработка результата расчета ---
+                    CurrentCheckItems.Clear(); // Очищаем UI перед заполнением новыми данными
+                    itemsToSave.Clear();      // Очищаем список для сохранения
+                    decimal newTotalDiscount = 0m; // Переменная для суммы скидок из расчета
+
+                    var productCache = new Dictionary<int, Product>(); // Кэш для названий товаров
+
+                    // Добавляем основные позиции с рассчитанными скидками
+                    foreach (var discountedItem in discountResult.DiscountedItems)
+                    {
+                        // Загрузка Product (оптимизированно)
+                        if (!productCache.TryGetValue(discountedItem.ProductId, out Product product))
+                        {
+                            product = await Task.Run(() => _productRepository.FindProductById(discountedItem.ProductId));
+                            productCache[discountedItem.ProductId] = product;
+                        }
+
+                        CurrentCheckItems.Add(new CheckItemView(discountedItem, product)); // Добавляем в UI
+                        itemsToSave.Add(discountedItem); // Добавляем в список для сохранения
+                        newTotalDiscount += discountedItem.DiscountAmount;
+                    }
+
+                    // Добавляем подарки (если есть и доступны)
+                    if (discountResult.GiftsToAdd.Any())
+                    {
+                        bool giftsAvailable = true;
+                        var giftsToAddFiltered = new List<CheckItem>(); // Подарки, прошедшие проверку
+                        foreach (var gift in discountResult.GiftsToAdd)
+                        {
+                            decimal giftStock = await Task.Run(() => _stockItemRepository.GetStockQuantity(gift.ProductId));
+                            if (giftStock < gift.Quantity)
+                            {
+                                giftsAvailable = false;
+                                Product giftProdInfo = productCache.ContainsKey(gift.ProductId) ? productCache[gift.ProductId] : await Task.Run(() => _productRepository.FindProductById(gift.ProductId));
+                                ShowTemporaryStatusMessage($"Недостаточно подарка '{giftProdInfo?.Name ?? "ID:" + gift.ProductId}' (ост: {giftStock}). Акция не применена.", isError: true);
+                                // Пропускаем этот подарок
+                            }
+                            else
+                            {
+                                giftsToAddFiltered.Add(gift); // Добавляем подарок, если он есть
+                            }
+                        }
+
+
+                        if (giftsToAddFiltered.Any())
+                        {
+                            // Догружаем инфо о товарах-подарках, если нужно
+                            var giftProductIds = giftsToAddFiltered.Select(g => g.ProductId).Distinct().ToList();
+                            foreach (var pid in giftProductIds)
+                            {
+                                if (!productCache.ContainsKey(pid))
+                                {
+                                    productCache[pid] = await Task.Run(() => _productRepository.FindProductById(pid));
+                                }
+                            }
+
+                            // Добавляем доступные подарки в UI и список для сохранения
+                            foreach (var giftItem in giftsToAddFiltered)
+                            {
+                                Product giftProduct = productCache.TryGetValue(giftItem.ProductId, out var p) ? p : null;
+                                CurrentCheckItems.Add(new CheckItemView(giftItem, giftProduct) { PriceAtSale = 0 });
+                                itemsToSave.Add(giftItem);
+                                ShowTemporaryStatusMessage($"Добавлен подарок: {giftProduct?.Name ?? "ID:" + giftItem.ProductId} x {giftItem.Quantity}", isInfo: true);
+                            }
+                        }
+                    }
+
+                    // Применяем скидку на чек (если она есть)
+                    if (discountResult.AppliedCheckDiscount != null)
+                    {
+                        decimal checkDiscountAmount = 0m;
+                        decimal currentTotalBeforeCheckDiscount = itemsToSave.Where(i => i.PriceAtSale > 0)
+                                                                          .Sum(i => i.ItemTotalAmount); // Сумма НЕПОДАРКОВ до скидки на чек
+
+                        if (discountResult.AppliedCheckDiscount.Value.HasValue && currentTotalBeforeCheckDiscount > 0)
+                        {
+                            if (discountResult.AppliedCheckDiscount.IsCheckDiscountPercentage)
+                            {
+                                checkDiscountAmount = currentTotalBeforeCheckDiscount * (Math.Min(100, discountResult.AppliedCheckDiscount.Value.Value) / 100m);
+                            }
+                            else
+                            {
+                                checkDiscountAmount = Math.Min(currentTotalBeforeCheckDiscount, discountResult.AppliedCheckDiscount.Value.Value);
+                            }
+                            checkDiscountAmount = Math.Round(checkDiscountAmount, 2);
+
+                            // Распределяем скидку
+                            if (checkDiscountAmount > 0)
+                            {
+                                decimal checkTotalForDistribution = itemsToSave.Where(i => i.PriceAtSale > 0).Sum(i => i.ItemTotalAmount);
+                                if (checkTotalForDistribution > 0)
+                                {
+                                    decimal distributedSum = 0m;
+                                    var itemsForCheckDiscount = itemsToSave.Where(i => i.PriceAtSale > 0).ToList();
+
+                                    for (int i = 0; i < itemsForCheckDiscount.Count; i++)
+                                    {
+                                        var item = itemsForCheckDiscount[i];
+                                        decimal itemTotalBeforeCheckDiscount = item.ItemTotalAmount;
+                                        if (itemTotalBeforeCheckDiscount <= 0) continue;
+
+                                        decimal itemShare = itemTotalBeforeCheckDiscount / checkTotalForDistribution;
+                                        decimal discountPortion = (i == itemsForCheckDiscount.Count - 1)
+                                                                 ? checkDiscountAmount - distributedSum
+                                                                 : Math.Round(checkDiscountAmount * itemShare, 2);
+
+                                        decimal discountToAdd = Math.Max(0, Math.Min(itemTotalBeforeCheckDiscount, discountPortion));
+
+                                        item.DiscountAmount += discountToAdd;
+                                        item.ItemTotalAmount -= discountToAdd; // Корректируем итоговую сумму
+                                        item.AppliedDiscountId = discountResult.AppliedCheckDiscount.DiscountId;
+                                        distributedSum += discountToAdd;
+
+                                        // Обновляем UI
+                                        var viewItem = CurrentCheckItems.FirstOrDefault(v => v.ProductId == item.ProductId && v.PriceAtSale > 0);
+                                        if (viewItem != null)
+                                        {
+                                            viewItem.DiscountAmount = item.DiscountAmount;
+                                            viewItem.AppliedDiscountId = item.AppliedDiscountId;
+                                        }
+                                    }
+                                    newTotalDiscount += distributedSum;
+                                }
+                                ShowTemporaryStatusMessage($"Применена скидка на чек: {discountResult.AppliedCheckDiscount.Name}", isInfo: true);
+                            }
+                        }
+                    }
+
+                    UpdateTotals(); // Финальное обновление итогов на экране
+                    ClearTemporaryStatusMessage(); // Убираем сообщение о применении скидок
+                    await Task.Delay(500); // Небольшая пауза перед диалогом оплаты
+
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Критическая ошибка при сохранении чека:\n{ex.Message}", "Ошибка сохранения", MessageBoxButton.OK, MessageBoxImage.Error);
-                    // Чек не очищаем
+                    MessageBox.Show($"Ошибка применения скидок:\n{ex.Message}", "Ошибка скидок", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    ShowError("Ошибка применения скидок"); // Показываем ошибку
+                                                           // Используем исходные данные без авто-скидок для оплаты
+                    itemsToSave = CurrentCheckItems.Select(civ => (CheckItem)civ).ToList();
+                    UpdateTotals(); // Обновляем итоги по данным из UI
                 }
+            }
+            else // Ручная скидка была применена
+            {
+                // itemsToSave уже содержит результат ручной скидки
+                ShowTemporaryStatusMessage("Применена ручная скидка, авто-скидки пропущены.", isInfo: true);
+                await Task.Delay(500); // Пауза
+            }
+            // --- КОНЕЦ БЛОКА СКИДОК ---
+
+
+            // Пересчитываем финальные итоги по списку itemsToSave на всякий случай
+            _totalDiscount = Math.Round(itemsToSave.Sum(i => i.DiscountAmount), 2);
+            _totalAmount = Math.Round(itemsToSave.Sum(i => i.ItemTotalAmount), 2);
+            UpdateTotals(); // Обновляем UI итогов
+
+
+            // 3. --- Проверка нулевой суммы ---
+            if (_totalAmount <= 0 && itemsToSave.Any(i => i.PriceAtSale > 0)) // Если есть не только бесплатные подарки
+            {
+                MessageBoxResult freeResult = MessageBox.Show($"Итоговая сумма чека {(_totalAmount < 0 ? "отрицательная" : "равна нулю")} из-за скидок. Завершить продажу бесплатно?",
+                                    "Нулевая сумма", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (freeResult == MessageBoxResult.No)
+                {
+                    ClearCheck(); // Отмена - очищаем чек
+                    return;
+                }
+                // Если Да - сохраняем чек как оплаченный Наличными 0
+                await SaveCheck(itemsToSave, "Cash", 0, 0); // Вызываем асинхронно
+                return; // Завершаем обработку клика
+            }
+            else if (!itemsToSave.Any(i => i.PriceAtSale > 0)) // Если в чеке только подарки (или пустой)
+            {
+                MessageBox.Show("В чеке нет позиций для оплаты.", "Пустой чек", MessageBoxButton.OK, MessageBoxImage.Information);
+                ClearCheck();
+                return;
+            }
+
+
+            // 4. --- Показ диалога оплаты ---
+            var paymentDialog = new PaymentDialog(_totalAmount);
+            paymentDialog.Owner = this; // Устанавливаем владельца
+            if (paymentDialog.ShowDialog() == true)
+            {
+                // 5. --- Получение деталей оплаты ---
+                string paymentType = paymentDialog.SelectedPaymentType;
+                decimal cashPaid = paymentDialog.CashPaid;
+                decimal cardPaid = paymentDialog.CardPaid;
+                decimal change = paymentDialog.Change;
+
+                // 6. --- Сохранение чека и печать ---
+                await SaveCheck(itemsToSave, paymentType, cashPaid, cardPaid, change); // Вызываем асинхронно
             }
             else
             {
                 // Оплата отменена
                 ShowTemporaryStatusMessage("Оплата отменена.");
+                // Скидки и подарки остаются в чеке
             }
+        }
+
+
+        // --- Новый метод для сохранения чека ---
+        private async Task SaveCheck(List<CheckItem> itemsToSave, string paymentType, decimal cashPaid, decimal cardPaid, decimal change = 0m)
+        {
+            // Формируем объект чека
+            var checkToSave = new Check
+            {
+                ShiftId = CurrentShift.ShiftId,
+                CheckNumber = _checkRepository.GetNextCheckNumber(CurrentShift.ShiftId),
+                Timestamp = DateTime.Now,
+                UserId = CurrentUser.UserId,
+                TotalAmount = itemsToSave.Sum(i => i.ItemTotalAmount), // Пересчитываем по финальному списку
+                PaymentType = paymentType,
+                CashPaid = cashPaid,
+                CardPaid = cardPaid,
+                DiscountAmount = Math.Round(itemsToSave.Sum(i => i.DiscountAmount), 2),
+                IsReturn = false,
+                OriginalCheckId = null,
+                Items = itemsToSave
+            };
+
+            try
+            {
+                PaymentButton.IsEnabled = false;
+                ShowTemporaryStatusMessage("Сохранение чека...", isInfo: true, durationSeconds: 10);
+
+                // Сохраняем чек асинхронно
+                var savedCheck = await Task.Run(() => _checkRepository.AddCheck(checkToSave));
+                ClearTemporaryStatusMessage(); // Убираем сообщение о сохранении
+
+                // "Печать" чека
+                StringBuilder printSb = new StringBuilder();
+                // ... (Код формирования printMessage как раньше, используя savedCheck) ...
+                string printMessage = $"Чек №{savedCheck.CheckNumber} сохранен.\n";
+                printMessage += $"Тип оплаты: {paymentType}\n";
+                if (paymentType == "Cash" || paymentType == "Mixed") printMessage += $"Получено наличными: {cashPaid:C}\n";
+                if (paymentType == "Card" || paymentType == "Mixed") printMessage += $"Оплачено картой: {cardPaid:C}\n";
+                if (change > 0) printMessage += $"Сдача: {change:C}\n"; // Используем переданную сдачу
+                printMessage += $"ИТОГО: {savedCheck.TotalAmount:C}";
+                PrinterService.Print($"Чек №{savedCheck.CheckNumber}", printMessage);
+
+                // Открываем ящик, если была оплата наличными (или сдача)
+                if (paymentType == "Cash" || (paymentType == "Mixed" && cashPaid > 0) || change > 0)
+                {
+                    PrinterService.OpenCashDrawer();
+                }
+
+                // Очищаем текущий чек
+                ClearCheck();
+            }
+            catch (InvalidOperationException invEx)
+            {
+                MessageBox.Show($"Не удалось сохранить чек (остатки):\n{invEx.Message}", "Ошибка остатков", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowError("Ошибка сохранения (остатки)");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Критическая ошибка при сохранении чека:\n{ex.Message}", "Ошибка сохранения", MessageBoxButton.OK, MessageBoxImage.Error);
+                ShowError("Критическая ошибка сохранения");
+            }
+            finally
+            {
+                // Разблокируем кнопку оплаты только если чек НЕ был успешно очищен (т.е. была ошибка)
+                PaymentButton.IsEnabled = CurrentCheckItems.Any();
+                ClearTemporaryStatusMessage(); // Убедимся, что статус очищен
+            }
+        }
+
+        // Метод для очистки временного сообщения в статус баре
+        private void ClearTemporaryStatusMessage()
+        {
+            // Проверяем, если текущий текст - это сообщение от ShowTemporaryStatusMessage,
+            // то сбрасываем его на стандартный. Это предотвратит стирание ошибок.
+            // Однако, проще просто сбрасывать всегда, если не показывается ошибка.
+            // if (!CashierInfoStatusText.Foreground == Brushes.Red) { // Не очень надежно
+            CashierInfoStatusText.Text = $"Кассир: {CurrentUser.FullName}"; // Возвращаем стандартный текст
+            CashierInfoStatusText.Foreground = Brushes.Black; // Стандартный цвет
+                                                              // }
+        }
+        private void ShowError(string message)
+        {
+            // Можно выводить в ErrorText над кнопками или в статус бар
+            // Пока выведем в статус бар красным
+            ShowTemporaryStatusMessage(message, isError: true, durationSeconds: 5); // Показываем на 5 секунд
         }
 
         private void QuantityButton_Click(object sender, RoutedEventArgs e)
@@ -691,7 +903,9 @@ namespace NexusPoint.Windows
                     // decimal stockNeeded = newQuantity - selectedItem.Quantity;
                     // ... проверка остатка ...
 
+
                     selectedItem.Quantity = newQuantity; // Просто меняем свойство
+                    _isManualDiscountApplied = false;
                     UpdateTotals(); // Пересчитать общие итоги нужно
                     ItemInputTextBox.Focus();
                 }
@@ -724,6 +938,7 @@ namespace NexusPoint.Windows
             {
 
                 CurrentCheckItems.Remove(selectedItem); // Удаляем из коллекции (UI обновится)
+                _isManualDiscountApplied = false;
                 UpdateTotals();
                 LastItemInfoText.Text = $"- Удалено: {selectedItem.ProductName} -";
                 ItemInputTextBox.Focus();
@@ -747,26 +962,57 @@ namespace NexusPoint.Windows
 
         private void ManualDiscountButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!CurrentCheckItems.Any()) return; // Нельзя применить к пустому чеку
+            if (CurrentUser.Role != "Manager" && CurrentUser.Role != "Admin")
+            {
+                MessageBox.Show("У вас недостаточно прав для применения ручной скидки.", "Доступ запрещен", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return; // Выходим из метода
+            }
 
-            decimal currentTotal = CurrentCheckItems.Sum(i => i.Quantity * i.PriceAtSale); // Берем сумму до скидок
+            if (!CurrentCheckItems.Any()) return;
+
+            decimal currentTotal = CurrentCheckItems.Sum(i => i.Quantity * i.PriceAtSale);
 
             var discountDialog = new DiscountDialog(currentTotal);
+            discountDialog.Owner = this; // Устанавливаем владельца
             if (discountDialog.ShowDialog() == true)
             {
-                // Скидка подтверждена, применяем ее ко всем позициям
+                // --- Применяем ручную скидку (ПЕРЕЗАПИСЫВАЯ автоматические) ---
+                // Создаем копию базовых CheckItem
+                List<CheckItem> itemsForManualDiscount = CurrentCheckItems
+                    .Select(civ => new CheckItem
+                    {
+                        ProductId = civ.ProductId,
+                        Quantity = civ.Quantity,
+                        PriceAtSale = civ.PriceAtSale,
+                        DiscountAmount = 0, // Сбрасываем перед применением ручной
+                        AppliedDiscountId = null // Ручная скидка без ID
+                    }).ToList();
+
                 decimal appliedAmount = DiscountCalculator.ApplyManualCheckDiscount(
-                    CurrentCheckItems.ToList<CheckItem>(), // Передаем базовые CheckItem
+                    itemsForManualDiscount,
                     discountDialog.DiscountValue,
                     discountDialog.IsPercentage);
 
-                // Обновляем UI ListView (если нужно "перерисовать" элементы)
-                var tempItems = CurrentCheckItems.ToList();
-                CurrentCheckItems.Clear();
-                tempItems.ForEach(CurrentCheckItems.Add);
+                // Обновляем CurrentCheckItems на основе результата
+                bool changed = false;
+                for (int i = 0; i < CurrentCheckItems.Count; i++)
+                {
+                    // Сравниваем ДО и ПОСЛЕ расчета
+                    if (CurrentCheckItems[i].DiscountAmount != itemsForManualDiscount[i].DiscountAmount ||
+                        CurrentCheckItems[i].AppliedDiscountId != itemsForManualDiscount[i].AppliedDiscountId)
+                    {
+                        CurrentCheckItems[i].DiscountAmount = itemsForManualDiscount[i].DiscountAmount;
+                        CurrentCheckItems[i].AppliedDiscountId = itemsForManualDiscount[i].AppliedDiscountId;
+                        changed = true;
+                    }
+                }
 
-                UpdateTotals(); // Пересчитываем общие итоги
-                ShowTemporaryStatusMessage($"Применена ручная скидка: {appliedAmount:C}", isInfo: true);
+                if (changed)
+                {
+                    UpdateTotals();
+                    ShowTemporaryStatusMessage($"Применена ручная скидка: {appliedAmount:C}", isInfo: true);
+                    _isManualDiscountApplied = true; 
+                }
             }
         }
 
@@ -1137,6 +1383,10 @@ namespace NexusPoint.Windows
                         if (QuantityButton.IsEnabled) ChangeSelectedItemQuantity();
                         e.Handled = true;
                         break;
+                    case Key.F4:
+                        if (ManualDiscountButton.IsEnabled) ManualDiscountButton_Click(ManualDiscountButton, new RoutedEventArgs());
+                        e.Handled = true;
+                        break;
                     case Key.Delete: // Удалить позицию
                         if (DeleteItemButton.IsEnabled) DeleteSelectedItem();
                         e.Handled = true;
@@ -1153,7 +1403,6 @@ namespace NexusPoint.Windows
                         MenuButton_Click(MenuButton, new RoutedEventArgs());
                         e.Handled = true;
                         break;
-                        // Добавить другие клавиши по необходимости (F3, F4 и т.д.)
                 }
             }
         }

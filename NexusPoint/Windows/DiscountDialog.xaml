@@ -25,10 +25,13 @@
         </Grid.RowDefinitions>
 
         <!-- Тип скидки -->
-        <GroupBox Grid.Row="0" Header="Тип скидки" Margin="0,0,0,10">
+        <GroupBox Grid.Row="0" Header="Тип скидки" Margin="0,0,0,10" TabIndex="0">
+            <!-- Убрали KeyDown -->
             <StackPanel Orientation="Horizontal" Margin="10,5">
-                <RadioButton x:Name="PercentageRadioButton" Content="Процент (%)" GroupName="DiscountType" IsChecked="True" Margin="0,0,20,0" Checked="DiscountType_Changed"/>
-                <RadioButton x:Name="AmountRadioButton" Content="Сумма" GroupName="DiscountType" Checked="DiscountType_Changed"/>
+                <RadioButton x:Name="PercentageRadioButton" Content="_Процент (%)" GroupName="DiscountType" IsChecked="True" Margin="0,0,20,0" Checked="DiscountType_Changed" TabIndex="1" KeyDown="RadioButton_KeyDown"/>
+                <!-- Добавили KeyDown -->
+                <RadioButton x:Name="AmountRadioButton" Content="_Сумма" GroupName="DiscountType" Checked="DiscountType_Changed" TabIndex="2" KeyDown="RadioButton_KeyDown"/>
+                <!-- Добавили KeyDown -->
             </StackPanel>
         </GroupBox>
 
@@ -36,7 +39,7 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
             <Label Content="Значение:" VerticalAlignment="Center"/>
             <TextBox x:Name="DiscountValueTextBox" Width="100" Margin="5,0" Height="25" VerticalContentAlignment="Center"
-                     PreviewTextInput="DiscountValueTextBox_PreviewTextInput" TextChanged="DiscountValueTextBox_TextChanged"/>
+                     PreviewTextInput="DiscountValueTextBox_PreviewTextInput" TextChanged="DiscountValueTextBox_TextChanged" TabIndex="3" KeyDown="ValueTextBox_KeyDown"/>
             <TextBlock x:Name="ValueSuffixText" Text="%" VerticalAlignment="Center" Margin="3,0,0,0"/>
         </StackPanel>
 
@@ -62,8 +65,8 @@
 
         <!-- Кнопки -->
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="OkButton" Content="Применить" Width="100" Height="30" IsDefault="True" Click="OkButton_Click"/>
-            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True"/>
+            <Button x:Name="OkButton" Content="Применить" Width="100" Height="30" IsDefault="True" Click="OkButton_Click" TabIndex="4"/>
+            <Button x:Name="CancelButton" Content="Отмена" Width="80" Height="30" Margin="10,0,0,0" IsCancel="True" TabIndex="5"/>
         </StackPanel>
 
     </Grid>
