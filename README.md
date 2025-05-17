@@ -70,9 +70,11 @@ NexusPoint POS — это настольное приложение Point of Sal
 <div align="center">
    
 ![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr1.png?raw=true)
+
 Окно выбора режима
 
 ![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr2.png?raw=true)
+
 Окно входа
 
 ![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr7.png?raw=true)
