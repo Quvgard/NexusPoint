@@ -67,17 +67,15 @@ NexusPoint POS — это настольное приложение Point of Sal
 
 ## 📸 Скриншоты
 
-*(Здесь разместите скриншоты основных окон приложения. Рекомендуется создать папку `docs/screenshots` в репозитории)*
-
-*   Окно выбора режима: `[docs/screenshots/main_window.png]`
-*   Окно входа: `[docs/screenshots/login_window.png]`
-*   Окно кассы (основное): `[docs/screenshots/cashier_window.png]`
-*   Окно оплаты: `[docs/screenshots/payment_dialog.png]`
-*   Окно возврата: `[docs/screenshots/return_window.png]`
-*   Окно управления (вкладка Товары): `[docs/screenshots/manager_products.png]`
-*   Окно управления (вкладка Остатки): `[docs/screenshots/manager_stock.png]`
-*   Окно управления (вкладка Пользователи): `[docs/screenshots/manager_users.png]`
-*   Окно управления (вкладка Скидки): `[docs/screenshots/manager_discounts.png]`
+*   Окно выбора режима: `[screenshots/scr1.png]`
+*   Окно входа: `[screenshots/login_window.png]`
+*   Окно кассы (основное): `[screenshots/cashier_window.png]`
+*   Окно оплаты: `[screenshots/payment_dialog.png]`
+*   Окно возврата: `screenshots/return_window.png]`
+*   Окно управления (вкладка Товары): `[screenshots/manager_products.png]`
+*   Окно управления (вкладка Остатки): `[screenshots/manager_stock.png]`
+*   Окно управления (вкладка Пользователи): `[screenshots/manager_users.png]`
+*   Окно управления (вкладка Скидки): `[screenshots/manager_discounts.png]`
 
 ## 🛠️ Технологический стек
 
