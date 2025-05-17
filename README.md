@@ -67,15 +67,36 @@ NexusPoint POS — это настольное приложение Point of Sal
 
 ## 📸 Скриншоты
 
-*   Окно выбора режима: `[screenshots/scr1.png]`
-*   Окно входа: `[screenshots/login_window.png]`
-*   Окно кассы (основное): `[screenshots/cashier_window.png]`
-*   Окно оплаты: `[screenshots/payment_dialog.png]`
-*   Окно возврата: `screenshots/return_window.png]`
-*   Окно управления (вкладка Товары): `[screenshots/manager_products.png]`
-*   Окно управления (вкладка Остатки): `[screenshots/manager_stock.png]`
-*   Окно управления (вкладка Пользователи): `[screenshots/manager_users.png]`
-*   Окно управления (вкладка Скидки): `[screenshots/manager_discounts.png]`
+<div align="center">
+   
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr1.png?raw=true)
+Окно выбора режима
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr2.png?raw=true)
+Окно входа
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr7.png?raw=true)
+Окно кассы (основное)
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr8.png?raw=true)
+Окно оплаты
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr9.png?raw=true)
+Пример чека
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr3.png?raw=true)
+Окно управления (вкладка Товары)
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr4.png?raw=true)
+Окно управления (вкладка Остатки)
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr5.png?raw=true)
+Окно управления (вкладка Пользователи)
+
+![alt text](https://github.com/Quvgard/NexusPoint/blob/main/screenshots/scr6.png?raw=true)
+Окно управления (вкладка Скидки)
+
+</div>
 
 ## 🛠️ Технологический стек
 
