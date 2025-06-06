@@ -178,7 +178,7 @@ namespace NexusPoint.BusinessLogic
             }
         }
 
-        public bool PerformCashOut(User user, decimal amount, string reason)
+        public async Task<bool> PerformCashOut(User user, decimal amount, string reason)
         {
             if (CurrentOpenShift == null)
             {
@@ -196,12 +196,18 @@ namespace NexusPoint.BusinessLogic
                 return false;
             }
 
-            // TODO: Добавить проверку, достаточно ли наличных в кассе для изъятия (потребует расчета текущего остатка)
-            // decimal currentCash = CalculateCurrentCash(); // Нужен метод расчета
-            // if (amount > currentCash) { ... ошибка ... }
-
             try
             {
+                
+                decimal currentCash = await _reportService.CalculateCurrentCashInDrawerAsync(CurrentOpenShift);
+
+                if (amount > currentCash)
+                {
+                    MessageBox.Show($"Изъятие невозможно. Сумма изъятия ({amount:C}) превышает количество наличных в кассе ({currentCash:C}).",
+                                    "Недостаточно средств", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
                 var operation = new CashDrawerOperation
                 {
                     ShiftId = CurrentOpenShift.ShiftId,
