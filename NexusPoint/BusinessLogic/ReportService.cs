@@ -156,5 +156,27 @@ namespace NexusPoint.BusinessLogic
             }
             else { return returnTotal; }
         }
+        public async Task<decimal> CalculateCurrentCashInDrawerAsync(Shift shift)
+        {
+            if (shift == null) return 0m;
+
+            // Загружаем связанные данные
+            var checks = await Task.Run(() => _checkRepository.GetChecksByShiftId(shift.ShiftId).ToList());
+            var cashOps = await Task.Run(() => _cashDrawerRepository.GetOperationsByShiftId(shift.ShiftId).ToList());
+
+            // Рассчитываем составляющие
+            decimal cashSales = checks.Where(c => !c.IsReturn).Sum(c => c.PaymentType == "Cash" ? c.TotalAmount : c.PaymentType == "Mixed" ? c.CashPaid : 0);
+
+            // Используем существующий приватный метод для расчета наличных, выданных при возвратах
+            decimal cashReturns = checks.Where(c => c.IsReturn).Sum(c => CalculateCashReturned(c));
+
+            decimal cashAdded = cashOps.Where(co => co.OperationType == "CashIn").Sum(co => co.Amount);
+            decimal cashRemoved = cashOps.Where(co => co.OperationType == "CashOut").Sum(co => co.Amount);
+
+            // Рассчитываем итоговую теоретическую сумму
+            decimal currentCashTheoretic = shift.StartCash + cashSales + cashAdded - cashRemoved - cashReturns;
+
+            return currentCashTheoretic;
+        }
     }
 }

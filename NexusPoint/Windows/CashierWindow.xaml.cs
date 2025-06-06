@@ -36,7 +36,8 @@ namespace NexusPoint.Windows
         private readonly AuthorizationService _authorizationService;
         private readonly ReportService _reportService;
         private readonly ProductManager _productManager; 
-        private readonly StockManager _stockManager;  
+        private readonly StockManager _stockManager;
+        private readonly FileReportLogger _fileReportLogger;
         // ReturnManager не нужен здесь, используется в ReturnWindow
 
         // --- UI State & Timers ---
@@ -74,6 +75,7 @@ namespace NexusPoint.Windows
             _productManager = new ProductManager(productRepository); 
             _stockManager = new StockManager(stockItemRepository, productRepository); 
             _authorizationService = new AuthorizationService();
+            _fileReportLogger = new FileReportLogger();
 
             // Подписка на события изменения SaleManager для обновления UI
             _saleManager.PropertyChanged += SaleManager_PropertyChanged;
@@ -717,17 +719,39 @@ namespace NexusPoint.Windows
         {
             if (_shiftManager.CurrentOpenShift == null) return;
 
-            var endCashDialog = new InputDialog("Закрыть смену", $"Смена №{_shiftManager.CurrentOpenShift.ShiftNumber}\nВведите фактическую сумму наличных в кассе:", "0");
-            endCashDialog.Owner = this;
-            if (endCashDialog.ShowDialog() == true && decimal.TryParse(endCashDialog.InputText, out decimal endCashActual))
+            var shiftToClose = _shiftManager.CurrentOpenShift;
+            if (shiftToClose == null) return; 
+
+            var endCashDialog = new InputDialog("Закрыть смену", $"Смена №{shiftToClose.ShiftNumber}\nВведите фактическую сумму наличных в кассе:", "0"); 
+            endCashDialog.Owner = this; 
+            if (endCashDialog.ShowDialog() == true && decimal.TryParse(endCashDialog.InputText, out decimal endCashActual)) 
             {
-                ShowTemporaryStatusMessage("Закрытие смены...", isInfo: true, durationSeconds: 10);
-                bool closed = await _shiftManager.CloseShiftAsync(CurrentUser, endCashActual);
-                ClearTemporaryStatusMessage();
+                ShowTemporaryStatusMessage("Закрытие смены и формирование Z-отчета...", isInfo: true, durationSeconds: 15); 
+                bool closed = await _shiftManager.CloseShiftAsync(CurrentUser, endCashActual); 
+                ClearTemporaryStatusMessage(); 
+
                 if (closed)
                 {
-                    _saleManager.ClearCheck(); // Очищаем чек после закрытия
-                }
+                    try
+                    {
+                        string reportTitle = $"Z-Отчет (Смена №{shiftToClose.ShiftNumber})";
+                        string reportContent = await _reportService.GenerateZReportAsync(shiftToClose);
+
+                        // 1. Автоматически сохраняем в текстовый лог-файл
+                        _fileReportLogger.AppendReportToFile(reportContent);
+
+                        // 2. Показываем отчет в новом окне
+                        var reportViewer = new ReportViewerWindow(reportTitle, reportContent);
+                        reportViewer.Owner = this;
+                        reportViewer.ShowDialog();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Смена закрыта, но произошла ошибка при формировании Z-отчета: {ex.Message}", "Ошибка отчета", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+
+                    _saleManager.ClearCheck(); 
+                }       
             }
             else if (endCashDialog.DialogResult == true)
             {
@@ -744,9 +768,20 @@ namespace NexusPoint.Windows
             }
             try
             {
-                ShowTemporaryStatusMessage("Формирование X-отчета...", isInfo: true, durationSeconds: 5);
-                string report = await _reportService.GenerateXReportAsync(_shiftManager.CurrentOpenShift);
-                PrinterService.Print($"X-Отчет (Смена №{_shiftManager.CurrentOpenShift.ShiftNumber})", report);
+                ShowTemporaryStatusMessage("Формирование X-отчета...", isInfo: true, durationSeconds: 10); 
+                string reportTitle = $"X-Отчет (Смена №{_shiftManager.CurrentOpenShift.ShiftNumber})"; 
+                string reportContent = await _reportService.GenerateXReportAsync(_shiftManager.CurrentOpenShift); 
+
+
+                // 1. Автоматически сохраняем в текстовый лог-файл
+                _fileReportLogger.AppendReportToFile(reportContent);
+
+                // 2. Показываем отчет в новом окне вместо печати
+                var reportViewer = new ReportViewerWindow(reportTitle, reportContent);
+                reportViewer.Owner = this;
+                reportViewer.ShowDialog();
+
+
                 ClearTemporaryStatusMessage();
             }
             catch (Exception ex)
@@ -772,7 +807,7 @@ namespace NexusPoint.Windows
             ItemInputTextBox.Focus();
         }
 
-        private void CashOutMenuItem_Click(object sender, RoutedEventArgs e)
+        private async void CashOutMenuItem_Click(object sender, RoutedEventArgs e)
         {
             var cashOutDialog = new InputDialog("Изъятие наличных", "Введите сумму для изъятия:");
             cashOutDialog.Owner = this;
@@ -781,10 +816,15 @@ namespace NexusPoint.Windows
                 var reasonDialog = new InputDialog("Изъятие наличных", "Введите причину (необязательно):");
                 reasonDialog.Owner = this;
                 reasonDialog.ShowDialog();
-                bool success = _shiftManager.PerformCashOut(CurrentUser, amount, reasonDialog.InputText);
+
+                bool success = await _shiftManager.PerformCashOut(CurrentUser, amount, reasonDialog.InputText);
+
                 if (success) ShowTemporaryStatusMessage($"Изъято {amount:C}.");
             }
-            else if (cashOutDialog.DialogResult == true) { MessageBox.Show("Некорректная сумма.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            else if (cashOutDialog.DialogResult == true)
+            {
+                MessageBox.Show("Некорректная сумма.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
             ItemInputTextBox.Focus();
         }
 
