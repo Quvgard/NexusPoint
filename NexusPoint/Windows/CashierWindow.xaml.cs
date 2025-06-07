@@ -3,23 +3,15 @@ using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using NexusPoint.Utils;
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using System.Windows.Threading;
-using System.ComponentModel; 
-using System.Runtime.CompilerServices; 
 
 namespace NexusPoint.Windows
 {
@@ -28,76 +20,56 @@ namespace NexusPoint.Windows
     public partial class CashierWindow : Window, INotifyPropertyChanged
     {
         private readonly User CurrentUser;
-
-        // --- Business Logic Services ---
         private readonly ShiftManager _shiftManager;
         private readonly SaleManager _saleManager;
         private readonly PaymentProcessor _paymentProcessor;
         private readonly AuthorizationService _authorizationService;
         private readonly ReportService _reportService;
-        private readonly ProductManager _productManager; 
+        private readonly ProductManager _productManager;
         private readonly StockManager _stockManager;
         private readonly FileReportLogger _fileReportLogger;
-        // ReturnManager не нужен здесь, используется в ReturnWindow
-
-        // --- UI State & Timers ---
         private ContextMenu _originalCheckListViewContextMenu;
         private DispatcherTimer _clockTimer;
         private DispatcherTimer _inactivityTimer;
         private const int InactivityTimeoutMinutes = 15;
         private bool _isLocked = false;
-
-        // --- Свойства для привязки к UI (делегируем SaleManager) ---
         public decimal Subtotal => _saleManager?.Subtotal ?? 0m;
         public decimal TotalDiscount => _saleManager?.TotalDiscount ?? 0m;
         public decimal TotalAmount => _saleManager?.TotalAmount ?? 0m;
-
-        // --- Конструктор ---
         public CashierWindow(User user)
         {
             InitializeComponent();
             CurrentUser = user ?? throw new ArgumentNullException(nameof(user));
-
-            // Инициализация репозиториев (необходимы для BL)
             var productRepository = new ProductRepository();
             var stockItemRepository = new StockItemRepository();
             var checkRepository = new CheckRepository();
             var shiftRepository = new ShiftRepository();
             var cashDrawerRepository = new CashDrawerOperationRepository();
-            var userRepository = new UserRepository(); // Нужен для отчетов и ShiftManager
-
-            // Инициализация Business Logic классов
+            var userRepository = new UserRepository();
             _authorizationService = new AuthorizationService();
             _reportService = new ReportService(checkRepository, cashDrawerRepository, userRepository);
             _shiftManager = new ShiftManager(shiftRepository, cashDrawerRepository, _reportService, userRepository);
             _saleManager = new SaleManager(productRepository, stockItemRepository);
             _paymentProcessor = new PaymentProcessor(checkRepository, productRepository, stockItemRepository);
-            _productManager = new ProductManager(productRepository); 
-            _stockManager = new StockManager(stockItemRepository, productRepository); 
+            _productManager = new ProductManager(productRepository);
+            _stockManager = new StockManager(stockItemRepository, productRepository);
             _authorizationService = new AuthorizationService();
             _fileReportLogger = new FileReportLogger();
-
-            // Подписка на события изменения SaleManager для обновления UI
             _saleManager.PropertyChanged += SaleManager_PropertyChanged;
             _shiftManager.ShiftOpened += ShiftManager_ShiftStateChanged;
             _shiftManager.ShiftClosed += ShiftManager_ShiftStateChanged;
-
-
-            // Привязка данных к UI
-            this.DataContext = this; // Для привязки Subtotal, TotalDiscount, TotalAmount
-            CheckListView.ItemsSource = _saleManager.CurrentCheckItems; // Привязка списка чека
+            this.DataContext = this;
+            CheckListView.ItemsSource = _saleManager.CurrentCheckItems;
 
             InitializeInactivityTimer();
             this.PreviewMouseMove += Window_ActivityDetected;
             this.PreviewKeyDown += Window_ActivityDetected;
         }
-
-        // --- Обработчик загрузки окна ---
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             _originalCheckListViewContextMenu = CheckListView.ContextMenu;
-            _shiftManager.CheckCurrentShiftState(); // Проверяем состояние смены при запуске
-            UpdateUIBasedOnShiftState(); // Обновляем UI (оверлей, контролы, меню)
+            _shiftManager.CheckCurrentShiftState();
+            UpdateUIBasedOnShiftState();
             UpdateCashierInfo();
             SetupClock();
             ItemInputTextBox.Focus();
@@ -107,12 +79,10 @@ namespace NexusPoint.Windows
                 ResetInactivityTimer();
             }
         }
-
-        // --- Обновление UI при изменении состояния смены ---
         private void ShiftManager_ShiftStateChanged(object sender, EventArgs e)
         {
-            // Обновляем UI из потока UI
-            Dispatcher.Invoke(() => {
+            Dispatcher.Invoke(() =>
+            {
                 UpdateUIBasedOnShiftState();
                 if (_shiftManager.CurrentOpenShift != null && !_isLocked)
                 {
@@ -124,44 +94,36 @@ namespace NexusPoint.Windows
                 }
             });
         }
-
-        // --- Обновление UI при изменении данных чека ---
         private void SaleManager_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            // Обновляем свойства, связанные с итогами, когда они меняются в SaleManager
             if (e.PropertyName == nameof(SaleManager.Subtotal)) OnPropertyChanged(nameof(Subtotal));
             if (e.PropertyName == nameof(SaleManager.TotalDiscount)) OnPropertyChanged(nameof(TotalDiscount));
             if (e.PropertyName == nameof(SaleManager.TotalAmount)) OnPropertyChanged(nameof(TotalAmount));
-
-            // Обновляем состояние кнопок и инфо о последнем товаре
             if (e.PropertyName == nameof(SaleManager.HasItems)) UpdateCheckoutButtonsState();
             if (e.PropertyName == nameof(SaleManager.LastAddedProduct)) UpdateLastItemInfo();
         }
-
-        // --- Управление состоянием UI (Оверлей, Контролы, Меню) ---
         private void UpdateUIBasedOnShiftState()
         {
             bool isShiftOpen = _shiftManager.CurrentOpenShift != null;
 
-            if (!isShiftOpen && !_isLocked) // Показываем оверлей только если не заблокировано
+            if (!isShiftOpen && !_isLocked)
             {
                 ShowOverlay("СМЕНА ЗАКРЫТА.\nНажмите F12 -> Открыть смену.", Brushes.White);
                 DisableCheckoutControls();
             }
-            else if (!_isLocked) // Если не заблокировано и смена открыта
+            else if (!_isLocked)
             {
                 HideOverlay();
                 EnableCheckoutControls();
             }
-            // Если заблокировано (_isLocked == true), оверлей и контролы управляются Lock/Unlock методами
 
-            UpdateShiftInfo(); // Обновляем текст статуса смены
-            UpdateMenuItemsState(); // Обновляем доступность пунктов меню
-            UpdateCheckoutButtonsState(); // Обновляем доступность кнопок оплаты и т.д.
+            UpdateShiftInfo();
+            UpdateMenuItemsState();
+            UpdateCheckoutButtonsState();
 
             if (!isShiftOpen)
             {
-                _saleManager.ClearCheck(); // Очищаем чек, если смена закрылась
+                _saleManager.ClearCheck();
             }
         }
 
@@ -176,25 +138,20 @@ namespace NexusPoint.Windows
 
             PaymentButton.IsEnabled = canPay;
             CancelCheckButton.IsEnabled = canModifyCheck;
-            QuantityButton.IsEnabled = canModifyCheck; // Зависит от выбора элемента в списке
-            DeleteItemButton.IsEnabled = canModifyCheck; // Зависит от выбора элемента в списке
-            ManualDiscountButton.IsEnabled = canModifyCheck; // Плюс проверка роли
+            QuantityButton.IsEnabled = canModifyCheck;
+            DeleteItemButton.IsEnabled = canModifyCheck;
+            ManualDiscountButton.IsEnabled = canModifyCheck;
 
             ReturnModeButton.IsEnabled = canStartActions;
-            PrintDocButton.IsEnabled = !_isLocked; // Печать доков можно разрешить всегда?
-            LookupItemButton.IsEnabled = !_isLocked; // Инфо о товаре тоже?
+            PrintDocButton.IsEnabled = !_isLocked;
+            LookupItemButton.IsEnabled = !_isLocked;
             ItemInputTextBox.IsEnabled = canStartActions;
-
-            // Контекстное меню
             if (CheckListView != null)
-            { // Добавим проверку на null
+            {
                 CheckListView.ContextMenu = canModifyCheck ? _originalCheckListViewContextMenu : null;
             }
-
-            // Фокус
             if (canStartActions)
             {
-                // Проверяем, где сейчас фокус, чтобы не перескакивал без нужды
                 if (!ItemInputTextBox.IsFocused && !CheckListView.IsFocused)
                 {
                     ItemInputTextBox.Focus();
@@ -228,13 +185,12 @@ namespace NexusPoint.Windows
 
         private void EnableCheckoutControls()
         {
-            // Доступность кнопок будет уточнена в UpdateCheckoutButtonsState
             ItemInputTextBox.IsEnabled = true;
             if (CheckListView != null && _originalCheckListViewContextMenu != null)
             {
                 CheckListView.ContextMenu = _originalCheckListViewContextMenu;
             }
-            UpdateCheckoutButtonsState(); // Пересчитываем доступность на основе состояния
+            UpdateCheckoutButtonsState();
         }
 
         private void UpdateCashierInfo()
@@ -262,17 +218,15 @@ namespace NexusPoint.Windows
             {
                 LastItemInfoText.Text = $"Добавлено: {product.Name}\nЦена: {product.Price:C}\nКод: {product.ProductCode}";
             }
-            else if (!string.IsNullOrWhiteSpace(ItemInputTextBox.Text)) // Если товар не найден после ввода
+            else if (!string.IsNullOrWhiteSpace(ItemInputTextBox.Text))
             {
                 LastItemInfoText.Text = $"- Товар с кодом/ШК '{ItemInputTextBox.Text}' не найден -";
             }
-            else // Если чек пуст
+            else
             {
                 LastItemInfoText.Text = "-";
             }
         }
-
-        // --- Часы ---
         private void SetupClock()
         {
             _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -282,15 +236,13 @@ namespace NexusPoint.Windows
         }
 
         private void UpdateClock() => ClockTextBlock.Text = DateTime.Now.ToString("HH:mm");
-
-        // --- Управление неактивностью и блокировкой ---
         private void InitializeInactivityTimer()
         {
             _inactivityTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(InactivityTimeoutMinutes) };
             _inactivityTimer.Tick += (s, e) => { if (this.IsActive && !_isLocked) LockScreen("Экран заблокирован из-за неактивности."); };
         }
 
-        private void ResetInactivityTimer() => _inactivityTimer?.Start(); // Просто перезапускаем
+        private void ResetInactivityTimer() => _inactivityTimer?.Start();
 
         private void Window_ActivityDetected(object sender, InputEventArgs e)
         {
@@ -304,19 +256,16 @@ namespace NexusPoint.Windows
             _inactivityTimer.Stop();
             DisableCheckoutControls();
             ShowOverlay($"{lockMessage}\nВведите пароль для разблокировки.", Brushes.OrangeRed);
-            AttemptUnlock(); // Начинаем процесс разблокировки
+            AttemptUnlock();
         }
 
         private void AttemptUnlock()
         {
-            // Используем AuthorizationService для получения пользователя
-            // Важно: LoginWindow должен уметь блокировать кнопку "Отмена", если это требуется при разблокировке
-            var loginWindow = new LoginWindow(CurrentUser.Username, true); // true - блокировать отмену
+            var loginWindow = new LoginWindow(CurrentUser.Username, true);
             loginWindow.Owner = this;
 
             if (loginWindow.ShowDialog() == true)
             {
-                // Проверяем, что вошел ТОТ ЖЕ пользователь
                 if (loginWindow.AuthenticatedUser != null && loginWindow.AuthenticatedUser.UserId == CurrentUser.UserId)
                 {
                     UnlockScreen();
@@ -324,17 +273,13 @@ namespace NexusPoint.Windows
                 else
                 {
                     MessageBox.Show("Для разблокировки необходимо войти под текущим пользователем.", "Ошибка разблокировки", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    // Повторяем попытку разблокировки
                     ShowOverlay($"Станция заблокирована.\nВход не выполнен. Повторите ввод пароля.", Brushes.OrangeRed);
-                    Dispatcher.BeginInvoke(new Action(AttemptUnlock), DispatcherPriority.Background); // Вызываем асинхронно, чтобы не блокировать UI
+                    Dispatcher.BeginInvoke(new Action(AttemptUnlock), DispatcherPriority.Background);
                 }
             }
             else
             {
-                // Пользователь нажал "Отмена" (если она была доступна) или закрыл окно
-                // Остаемся заблокированными
                 ShowOverlay($"Станция заблокирована.\nВход не выполнен. Станция остается заблокированной.", Brushes.OrangeRed);
-                // Можно запланировать повторный вызов AttemptUnlock через какое-то время или оставить так
             }
         }
 
@@ -342,11 +287,11 @@ namespace NexusPoint.Windows
         private void UnlockScreen()
         {
             _isLocked = false;
-            _shiftManager.CheckCurrentShiftState(); // Перепроверяем состояние смены
-            UpdateUIBasedOnShiftState(); // Обновляем UI в соответствии с состоянием смены
+            _shiftManager.CheckCurrentShiftState();
+            UpdateUIBasedOnShiftState();
             if (_shiftManager.CurrentOpenShift != null)
             {
-                ResetInactivityTimer(); // Запускаем таймер, если смена открыта
+                ResetInactivityTimer();
                 ItemInputTextBox.Focus();
                 ShowTemporaryStatusMessage("Станция разблокирована.", isInfo: true);
             }
@@ -356,8 +301,6 @@ namespace NexusPoint.Windows
             }
 
         }
-
-        // --- Обработка ввода товара ---
         private void ItemInputTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(ItemInputTextBox.Text))
@@ -371,7 +314,7 @@ namespace NexusPoint.Windows
 
                 string codeOrBarcode = ItemInputTextBox.Text.Trim();
 
-                decimal stockBeforeAdding = -1; 
+                decimal stockBeforeAdding = -1;
                 Product productInfo = null;
                 try
                 {
@@ -382,77 +325,62 @@ namespace NexusPoint.Windows
                         stockBeforeAdding = new StockItemRepository().GetStockQuantity(productInfo.ProductId);
                     }
                 }
-                catch { } 
+                catch { }
 
-                ItemInputTextBox.Clear(); 
+                ItemInputTextBox.Clear();
 
                 bool added = _saleManager.AddItem(codeOrBarcode);
 
-                UpdateLastItemInfo(); 
+                UpdateLastItemInfo();
 
                 if (!added && _saleManager.LastAddedProduct == null)
                 {
                     ShowTemporaryStatusMessage($"Товар с кодом/ШК '{codeOrBarcode}' не найден!", isError: true);
                 }
 
-                else if (added && stockBeforeAdding <= 0 && productInfo != null) 
+                else if (added && stockBeforeAdding <= 0 && productInfo != null)
                 {
-                    ShowTemporaryStatusMessage($"Товар '{productInfo.Name}' добавлен (Остаток <= 0!)", isInfo: true); 
+                    ShowTemporaryStatusMessage($"Товар '{productInfo.Name}' добавлен (Остаток <= 0!)", isInfo: true);
                 }
 
                 e.Handled = true;
             }
         }
-
-        // --- Обработка кнопок чека ---
         private async void PaymentButton_Click(object sender, RoutedEventArgs e)
         {
             if (!PaymentButton.IsEnabled) return;
-
-            // --- Добавляем блок расчета авто-скидок ПЕРЕД диалогом оплаты ---
             if (!_saleManager.IsManualDiscountApplied)
             {
-                PaymentButton.IsEnabled = false; // Блокируем кнопку на время расчета
+                PaymentButton.IsEnabled = false;
                 ShowTemporaryStatusMessage("Расчет автоматических скидок...", isInfo: true, durationSeconds: 15);
                 bool discountApplied = await _saleManager.CalculateAndApplyAutoDiscountsAsync();
                 ClearTemporaryStatusMessage();
-                // Обновляем состояние кнопки после расчета (TotalAmount мог измениться)
                 UpdateCheckoutButtonsState();
 
 
                 if (!discountApplied)
                 {
-                    // Если при расчете скидок произошла ошибка, не продолжаем оплату
-                    PaymentButton.IsEnabled = true; // Разблокируем кнопку
+                    PaymentButton.IsEnabled = true;
                     ItemInputTextBox.Focus();
                     return;
                 }
-                // Если скидки применены, UI уже обновился через PropertyChanged из SaleManager
             }
-            // --- Конец блока расчета авто-скидок ---
-
-
-            // Проверка, остались ли вообще товары к оплате после скидок
             if (!_saleManager.HasItems)
             {
                 ShowTemporaryStatusMessage("Чек пуст после применения скидок/подарков.", isInfo: true);
                 ItemInputTextBox.Focus();
                 return;
             }
-
-            // Используем обновленную сумму из SaleManager
-            var paymentDialog = new PaymentDialog(_saleManager.TotalAmount); // <--- ИЗМЕНЕНО: Используем актуальный TotalAmount
+            var paymentDialog = new PaymentDialog(_saleManager.TotalAmount);
             paymentDialog.Owner = this;
 
             if (paymentDialog.ShowDialog() == true)
             {
                 PaymentButton.IsEnabled = false;
                 ShowTemporaryStatusMessage("Обработка оплаты...", isInfo: true, durationSeconds: 15);
-
-                // Передаем ТЕКУЩИЕ (уже со скидками) данные из SaleManager в процессор
                 var savedCheck = await _paymentProcessor.ProcessPaymentAsync(
-                    _saleManager.CurrentCheckItems, // Передаем текущие элементы
-                    _saleManager.IsManualDiscountApplied, // Передаем актуальный флаг
+                    _saleManager.CurrentCheckItems,
+                    _saleManager.IsManualDiscountApplied,
                     _shiftManager.CurrentOpenShift,
                     CurrentUser,
                     paymentDialog.SelectedPaymentType,
@@ -464,19 +392,17 @@ namespace NexusPoint.Windows
 
                 if (savedCheck != null)
                 {
-                    _saleManager.ClearCheck(); // Очищаем чек в SaleManager
+                    _saleManager.ClearCheck();
                     ItemInputTextBox.Focus();
                 }
                 else
                 {
-                    // Оставляем чек как есть для исправления
-                    UpdateCheckoutButtonsState(); // Восстанавливаем состояние кнопок
+                    UpdateCheckoutButtonsState();
                 }
             }
             else
             {
                 ShowTemporaryStatusMessage("Оплата отменена.");
-                // Скидки, примененные на предыдущем шаге, остаются в чеке
                 ItemInputTextBox.Focus();
             }
         }
@@ -583,7 +509,7 @@ namespace NexusPoint.Windows
             }
             if (!_saleManager.HasItems) return;
 
-            var discountDialog = new DiscountDialog(Subtotal); // Используем свойство Subtotal
+            var discountDialog = new DiscountDialog(Subtotal);
             discountDialog.Owner = this;
             if (discountDialog.ShowDialog() == true)
             {
@@ -621,9 +547,6 @@ namespace NexusPoint.Windows
                 }
             }
         }
-
-
-        // --- Меню (F12) ---
         private void MenuButton_Click(object sender, RoutedEventArgs e)
         {
             MainMenuPopup.IsOpen = !MainMenuPopup.IsOpen;
@@ -691,15 +614,11 @@ namespace NexusPoint.Windows
             }
             else if (VisualTreeHelper.GetParent(e.OriginalSource as DependencyObject) is TextBlock tb && VisualTreeHelper.GetParent(tb) is ListBoxItem parentItem && parentItem.IsEnabled)
             {
-                // Клик по TextBlock внутри активного ListBoxItem
                 MenuListBox.SelectedItem = parentItem;
                 ExecuteSelectedMenuItem();
                 e.Handled = true;
             }
         }
-
-
-        // --- Обработчики пунктов меню ---
         private void OpenShiftMenuItem_Click(object sender, RoutedEventArgs e)
         {
             var startCashDialog = new InputDialog("Открыть смену", "Введите сумму наличных в кассе на начало смены:", "0");
@@ -717,7 +636,6 @@ namespace NexusPoint.Windows
 
         private async void CloseShiftMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            // Проверяем, есть ли что закрывать
             if (_shiftManager.CurrentOpenShift == null) return;
 
             var endCashDialog = new InputDialog("Закрыть смену", $"Смена №{_shiftManager.CurrentOpenShift.ShiftNumber}\nВведите фактическую сумму наличных в кассе:", "0");
@@ -726,25 +644,16 @@ namespace NexusPoint.Windows
             if (endCashDialog.ShowDialog() == true && decimal.TryParse(endCashDialog.InputText, out decimal endCashActual))
             {
                 ShowTemporaryStatusMessage("Закрытие смены и формирование Z-отчета...", isInfo: true, durationSeconds: 15);
-
-                // Вызываем обновленный метод, который вернет данные о закрытой смене
                 Shift closedShift = await _shiftManager.CloseShiftAsync(CurrentUser, endCashActual);
 
                 ClearTemporaryStatusMessage();
-
-                // Если метод вернул данные (т.е. смена успешно закрыта)
                 if (closedShift != null)
                 {
                     try
                     {
                         string reportTitle = $"Z-Отчет (Смена №{closedShift.ShiftNumber})";
-                        // Используем полученный объект для генерации отчета
                         string reportContent = await _reportService.GenerateZReportAsync(closedShift);
-
-                        // 1. Автоматически сохраняем в лог-файл
                         _fileReportLogger.AppendReportToFile(reportContent);
-
-                        // 2. Показываем отчет в нашем кастомном окне
                         var reportViewer = new ReportViewerWindow(reportTitle, reportContent);
                         reportViewer.Owner = this;
                         reportViewer.ShowDialog();
@@ -754,9 +663,8 @@ namespace NexusPoint.Windows
                         MessageBox.Show($"Смена закрыта, но произошла ошибка при формировании Z-отчета: {ex.Message}", "Ошибка отчета", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
 
-                    _saleManager.ClearCheck(); // Очищаем чек
+                    _saleManager.ClearCheck();
                 }
-                // Если closedShift == null, значит, была ошибка, и сообщение об этом уже показано из ShiftManager.
             }
             else if (endCashDialog.DialogResult == true)
             {
@@ -773,15 +681,10 @@ namespace NexusPoint.Windows
             }
             try
             {
-                ShowTemporaryStatusMessage("Формирование X-отчета...", isInfo: true, durationSeconds: 10); 
-                string reportTitle = $"X-Отчет (Смена №{_shiftManager.CurrentOpenShift.ShiftNumber})"; 
-                string reportContent = await _reportService.GenerateXReportAsync(_shiftManager.CurrentOpenShift); 
-
-
-                // 1. Автоматически сохраняем в текстовый лог-файл
+                ShowTemporaryStatusMessage("Формирование X-отчета...", isInfo: true, durationSeconds: 10);
+                string reportTitle = $"X-Отчет (Смена №{_shiftManager.CurrentOpenShift.ShiftNumber})";
+                string reportContent = await _reportService.GenerateXReportAsync(_shiftManager.CurrentOpenShift);
                 _fileReportLogger.AppendReportToFile(reportContent);
-
-                // 2. Показываем отчет в новом окне вместо печати
                 var reportViewer = new ReportViewerWindow(reportTitle, reportContent);
                 reportViewer.Owner = this;
                 reportViewer.ShowDialog();
@@ -804,7 +707,7 @@ namespace NexusPoint.Windows
             {
                 var reasonDialog = new InputDialog("Внесение наличных", "Введите причину (необязательно):");
                 reasonDialog.Owner = this;
-                reasonDialog.ShowDialog(); // Не важно, ОК или Отмена
+                reasonDialog.ShowDialog();
                 bool success = _shiftManager.PerformCashIn(CurrentUser, amount, reasonDialog.InputText);
                 if (success) ShowTemporaryStatusMessage($"Внесено {amount:C}.");
             }
@@ -841,8 +744,6 @@ namespace NexusPoint.Windows
             mainWindow.Show();
             this.Close();
         }
-
-        // --- Горячие клавиши ---
         private void Window_KeyDown(object sender, KeyEventArgs e)
         {
             if (this.IsActive && !MainMenuPopup.IsOpen && !_isLocked)
@@ -857,20 +758,17 @@ namespace NexusPoint.Windows
                     case Key.F12: MenuButton_Click(null, null); e.Handled = true; break;
                 }
             }
-            else if (e.Key == Key.Escape && MainMenuPopup.IsOpen) // Закрыть меню по Esc
+            else if (e.Key == Key.Escape && MainMenuPopup.IsOpen)
             {
                 MainMenuPopup.IsOpen = false;
                 MenuButton.Focus();
                 e.Handled = true;
             }
         }
-
-        // --- Управление окном ---
         protected override void OnClosing(CancelEventArgs e)
         {
             _clockTimer?.Stop();
             _inactivityTimer?.Stop();
-            // Отписываемся от событий
             if (_saleManager != null) _saleManager.PropertyChanged -= SaleManager_PropertyChanged;
             if (_shiftManager != null)
             {
@@ -879,12 +777,8 @@ namespace NexusPoint.Windows
             }
             base.OnClosing(e);
         }
-
-        // Опционально: управление таймером при активации/деактивации окна
-        protected override void OnDeactivated(EventArgs e) { base.OnDeactivated(e); /* _inactivityTimer?.Stop(); */ }
-        protected override void OnActivated(EventArgs e) { base.OnActivated(e); /* if (!_isLocked && _shiftManager.CurrentOpenShift != null) ResetInactivityTimer(); */ }
-
-        // --- Вспомогательные методы для статуса ---
+        protected override void OnDeactivated(EventArgs e) { base.OnDeactivated(e); }
+        protected override void OnActivated(EventArgs e) { base.OnActivated(e); }
         private async void ShowTemporaryStatusMessage(string message, bool isError = false, bool isInfo = false, int durationSeconds = 3)
         {
             var originalContent = $"Кассир: {CurrentUser.FullName}";
@@ -898,7 +792,6 @@ namespace NexusPoint.Windows
             try { await Task.Delay(TimeSpan.FromSeconds(durationSeconds)); }
             finally
             {
-                // Восстанавливаем, только если сообщение не было изменено снова
                 if (CashierInfoStatusText.Text == message)
                 {
                     CashierInfoStatusText.Text = originalContent;
@@ -915,8 +808,6 @@ namespace NexusPoint.Windows
                 CashierInfoStatusText.Foreground = Brushes.Black;
             }
         }
-
-        // --- Реализация INotifyPropertyChanged ---
         public event PropertyChangedEventHandler PropertyChanged;
         protected virtual void OnPropertyChanged(string propertyName)
         {

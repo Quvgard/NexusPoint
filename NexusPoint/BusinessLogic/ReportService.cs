@@ -1,7 +1,6 @@
 ﻿using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -14,7 +13,7 @@ namespace NexusPoint.BusinessLogic
         private readonly CheckRepository _checkRepository;
         private readonly CashDrawerOperationRepository _cashDrawerRepository;
         private readonly UserRepository _userRepository;
-        private readonly CultureInfo _culture = new CultureInfo("ru-RU"); // Для форматирования
+        private readonly CultureInfo _culture = new CultureInfo("ru-RU");
 
         public ReportService(CheckRepository checkRepository, CashDrawerOperationRepository cashDrawerRepository, UserRepository userRepository)
         {
@@ -41,10 +40,7 @@ namespace NexusPoint.BusinessLogic
             decimal totalReturns = checks.Where(c => c.IsReturn).Sum(c => c.TotalAmount);
             decimal cashSales = checks.Where(c => !c.IsReturn).Sum(c => c.PaymentType == "Cash" ? c.TotalAmount : c.PaymentType == "Mixed" ? c.CashPaid : 0);
             decimal cardSales = checks.Where(c => !c.IsReturn).Sum(c => c.PaymentType == "Card" ? c.TotalAmount : c.PaymentType == "Mixed" ? c.CardPaid : 0);
-
-            // --- ИСПРАВЛЕННАЯ СТРОКА ---
             decimal cashReturns = checks.Where(c => c.IsReturn).Sum(c => CalculateCashReturned(c));
-            // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
             decimal cashAdded = cashOps.Where(co => co.OperationType == "CashIn").Sum(co => co.Amount);
             decimal cashRemoved = cashOps.Where(co => co.OperationType == "CashOut").Sum(co => co.Amount);
@@ -110,7 +106,6 @@ namespace NexusPoint.BusinessLogic
             sb.AppendLine($"  Наличными: {(closedShift.CashSales ?? 0).ToString("C", _culture)}");
             sb.AppendLine($"  Картой: {(closedShift.CardSales ?? 0).ToString("C", _culture)}");
             sb.AppendLine($"Возвраты (Итог): {(closedShift.TotalReturns ?? 0).ToString("C", _culture)}");
-            // Пересчитаем возвращенные наличные для Z-отчета тоже, т.к. они не хранятся
             var checksInShift = await Task.Run(() => _checkRepository.GetChecksByShiftId(closedShift.ShiftId).ToList());
             decimal cashReturnsInShift = checksInShift.Where(c => c.IsReturn).Sum(c => CalculateCashReturned(c));
             sb.AppendLine($"  (Возвращено наличными: {cashReturnsInShift.ToString("C", _culture)})");
@@ -130,15 +125,12 @@ namespace NexusPoint.BusinessLogic
             Check originalCheck = null;
             if (returnCheck.OriginalCheckId.HasValue)
             {
-                // Используем синхронный вызов, т.к. вызывается из синхронного контекста Sum()
-                // В идеале, данные оригинальных чеков нужно было бы загрузить заранее асинхронно.
                 try
                 {
                     originalCheck = _checkRepository.GetCheckById(returnCheck.OriginalCheckId.Value);
                 }
                 catch
                 {
-                    // Ошибка загрузки оригинала - считаем возврат наличными
                     return returnCheck.TotalAmount;
                 }
             }
@@ -159,21 +151,13 @@ namespace NexusPoint.BusinessLogic
         public async Task<decimal> CalculateCurrentCashInDrawerAsync(Shift shift)
         {
             if (shift == null) return 0m;
-
-            // Загружаем связанные данные
             var checks = await Task.Run(() => _checkRepository.GetChecksByShiftId(shift.ShiftId).ToList());
             var cashOps = await Task.Run(() => _cashDrawerRepository.GetOperationsByShiftId(shift.ShiftId).ToList());
-
-            // Рассчитываем составляющие
             decimal cashSales = checks.Where(c => !c.IsReturn).Sum(c => c.PaymentType == "Cash" ? c.TotalAmount : c.PaymentType == "Mixed" ? c.CashPaid : 0);
-
-            // Используем существующий приватный метод для расчета наличных, выданных при возвратах
             decimal cashReturns = checks.Where(c => c.IsReturn).Sum(c => CalculateCashReturned(c));
 
             decimal cashAdded = cashOps.Where(co => co.OperationType == "CashIn").Sum(co => co.Amount);
             decimal cashRemoved = cashOps.Where(co => co.OperationType == "CashOut").Sum(co => co.Amount);
-
-            // Рассчитываем итоговую теоретическую сумму
             decimal currentCashTheoretic = shift.StartCash + cashSales + cashAdded - cashRemoved - cashReturns;
 
             return currentCashTheoretic;

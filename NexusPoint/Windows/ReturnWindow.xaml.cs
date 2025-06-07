@@ -1,26 +1,14 @@
 ﻿using NexusPoint.BusinessLogic;
 using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
-using NexusPoint.Utils;
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Globalization;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
-using System.Windows.Threading;
 
 namespace NexusPoint.Windows
 {
@@ -28,25 +16,17 @@ namespace NexusPoint.Windows
     {
         private readonly User CurrentUser;
         private readonly Shift CurrentShift;
-
-        // --- Business Logic Manager ---
         private readonly ReturnManager _returnManager;
 
         public ReturnWindow(User user, Shift shift)
         {
             InitializeComponent();
             CurrentUser = user ?? throw new ArgumentNullException(nameof(user));
-            CurrentShift = shift; // Проверка на null при загрузке
-
-            // Инициализация репозиториев
+            CurrentShift = shift;
             var checkRepository = new CheckRepository();
             var productRepository = new ProductRepository();
             var stockItemRepository = new StockItemRepository();
-
-            // Инициализация менеджера
             _returnManager = new ReturnManager(checkRepository, productRepository, stockItemRepository);
-
-            // Устанавливаем DataContext для привязок XAML
             this.DataContext = _returnManager;
         }
 
@@ -97,27 +77,20 @@ namespace NexusPoint.Windows
             FindCheckButton.IsEnabled = true;
 
 
-            if (!found && _returnManager.OriginalCheck == null) // Если не найден ИЛИ это был чек возврата (OriginalCheck сбросился)
+            if (!found && _returnManager.OriginalCheck == null)
             {
-                // Сообщение об ошибке покажется из ReturnManager или будет в StatusText
-                // Проверим StatusText на всякий случай
                 if (string.IsNullOrEmpty(StatusText.Text))
                 {
                     ShowError($"Чек продажи №{checkNumber} в смене №{shiftNumber} не найден или является чеком возврата.");
                 }
-                // OriginalCheckListView и итоги очистятся через ClearCurrentReturn в менеджере
             }
             else if (found)
             {
-                // Обновляем текст типа оплаты (т.к. его не привязали)
                 UpdatePaymentTypeText();
-                // Данные списка и итогов обновятся через привязку
             }
-            CheckNumberTextBox.Focus(); // Возвращаем фокус
+            CheckNumberTextBox.Focus();
             CheckNumberTextBox.SelectAll();
         }
-
-        // Обновляем текстовое представление типа оплаты (можно заменить конвертером в XAML)
         private void UpdatePaymentTypeText()
         {
             if (_returnManager.OriginalCheck != null)
@@ -136,9 +109,6 @@ namespace NexusPoint.Windows
                 OriginalPaymentTypeText.Text = "";
             }
         }
-
-
-        // Валидация ввода количества
         private void QuantityTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
             TextBox textBox = sender as TextBox;
@@ -147,15 +117,11 @@ namespace NexusPoint.Windows
             string pattern = $@"^\d*({Regex.Escape(decimalSeparator)}?\d*)?$";
             Regex regex = new Regex(pattern);
             if (!regex.IsMatch(currentText)) e.Handled = true;
-            // Пересчет итогов и обновление кнопки произойдет автоматически через привязку и INotifyPropertyChanged
         }
-
-        // Нажатие Enter в списке (можно использовать для перехода к редактированию количества, если нужно)
         private void OriginalCheckListView_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter && OriginalCheckListView.SelectedItem is ReturnItemView selectedItem)
             {
-                // Найти TextBox в выбранной строке и сфокусироваться на нем
                 var listViewItem = OriginalCheckListView.ItemContainerGenerator.ContainerFromItem(selectedItem) as ListViewItem;
                 if (listViewItem != null)
                 {
@@ -169,8 +135,6 @@ namespace NexusPoint.Windows
                 }
             }
         }
-
-        // Вспомогательный метод для поиска элемента внутри визуального дерева
         private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
         {
             if (parent == null) return null;
@@ -190,27 +154,17 @@ namespace NexusPoint.Windows
             }
             return null;
         }
-
-
-        // Кнопка "Выбрать все"
         private void ReturnAllButton_Click(object sender, RoutedEventArgs e)
         {
             _returnManager.SetReturnQuantityForAll(true);
-            // UI обновится через привязки
         }
-
-        // Кнопка "Сбросить кол-во"
         private void ClearSelectionButton_Click(object sender, RoutedEventArgs e)
         {
-            _returnManager.SetReturnQuantityForAll(false); // Устанавливаем 0 для всех
-                                                           // UI обновится через привязки
+            _returnManager.SetReturnQuantityForAll(false);
         }
-
-
-        // Кнопка "Оформить возврат"
         private async void ProcessReturnButton_Click(object sender, RoutedEventArgs e)
         {
-            ProcessReturnButton.IsEnabled = false; // Блокируем на время обработки
+            ProcessReturnButton.IsEnabled = false;
             FindCheckButton.IsEnabled = false;
             StatusText.Text = "Обработка возврата...";
 
@@ -218,22 +172,17 @@ namespace NexusPoint.Windows
 
             StatusText.Text = "";
             FindCheckButton.IsEnabled = true;
-            // ProcessReturnButton останется выключенным, если CanProcessReturn == false после очистки
 
             if (success)
             {
                 MessageBox.Show("Возврат успешно оформлен.", "Возврат", MessageBoxButton.OK, MessageBoxImage.Information);
-                this.DialogResult = true; // Закрываем окно
+                this.DialogResult = true;
             }
-            // Если ошибка, сообщение будет показано из ReturnManager, кнопка останется доступной (если CanProcessReturn = true)
             else
             {
-                ProcessReturnButton.IsEnabled = _returnManager.CanProcessReturn; // Восстанавливаем состояние кнопки
+                ProcessReturnButton.IsEnabled = _returnManager.CanProcessReturn;
             }
         }
-
-
-        // --- Вспомогательные ---
         private void ShowError(string message, bool isInfo = false)
         {
             StatusText.Text = message;

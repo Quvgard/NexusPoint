@@ -1,16 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace NexusPoint.Utils
+﻿namespace NexusPoint.Utils
 {
     public static class PasswordHasher
     {
         public static string HashPassword(string password)
         {
-            // Генерируем соль и хешируем пароль
             return BCrypt.Net.BCrypt.HashPassword(password);
         }
 
@@ -18,15 +11,14 @@ namespace NexusPoint.Utils
         {
             try
             {
-                // Проверяем соответствие пароля хешу
                 return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
             }
-            catch (BCrypt.Net.SaltParseException) // Обработка некорректного хеша
+            catch (BCrypt.Net.SaltParseException)
             {
                 System.Diagnostics.Debug.WriteLine("Password hash verification failed: Invalid salt format.");
                 return false;
             }
-            catch (System.ArgumentException ex) // Обработка других ошибок верификации
+            catch (System.ArgumentException ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Password hash verification error: {ex.Message}");
                 return false;

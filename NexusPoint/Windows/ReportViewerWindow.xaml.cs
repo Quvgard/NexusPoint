@@ -1,26 +1,12 @@
 ﻿using Microsoft.Win32;
 using NexusPoint.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using NPOI.XWPF.UserModel;
+using System;
 using System.IO;
+using System.Windows;
 
 namespace NexusPoint.Windows
 {
-    /// <summary>
-    /// Логика взаимодействия для ReportViewerWindow.xaml
-    /// </summary>
     public partial class ReportViewerWindow : Window
     {
         private readonly string _reportTitle;
@@ -62,24 +48,16 @@ namespace NexusPoint.Windows
             {
                 try
                 {
-                    // 1. Создаем новый пустой .docx документ
                     var document = new XWPFDocument();
-
-                    // 2. Разбиваем весь текст отчета на отдельные строки
                     string[] lines = _reportContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-
-                    // 3. Создаем абзац для каждой строки
                     foreach (var line in lines)
                     {
                         var paragraph = document.CreateParagraph();
                         var run = paragraph.CreateRun();
                         run.SetText(line);
-                        // Для сохранения моноширинного вида, как в отчете
                         run.FontFamily = "Consolas";
                         run.FontSize = 10;
                     }
-
-                    // 4. Сохраняем документ в файл
                     using (var fs = new FileStream(saveFileDialog.FileName, FileMode.Create, FileAccess.Write))
                     {
                         document.Write(fs);

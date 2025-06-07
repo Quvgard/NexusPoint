@@ -1,38 +1,26 @@
 ﻿using NexusPoint.BusinessLogic;
-using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 
 namespace NexusPoint.Windows
 {
     public partial class AddEditDiscountWindow : Window
     {
-        // --- Поля класса ---
-        // Заменяем репозитории на менеджеры
         private readonly DiscountManager _discountManager;
-        private readonly ProductManager _productManager; // Нужен для поиска товаров
+        private readonly ProductManager _productManager;
 
         private readonly Discount _originalDiscount;
         private bool IsEditMode => _originalDiscount != null;
         private Product _requiredProduct = null;
         private Product _giftProduct = null;
-
-        // --- Конструкторы ---
-        // Принимаем менеджеры через конструктор
         public AddEditDiscountWindow(DiscountManager discountManager, ProductManager productManager)
         {
             InitializeComponent();
@@ -43,53 +31,40 @@ namespace NexusPoint.Windows
         }
 
         public AddEditDiscountWindow(DiscountManager discountManager, ProductManager productManager, Discount discountToEdit)
-            : this(discountManager, productManager) // Вызов основного конструктора
+            : this(discountManager, productManager)
         {
             _originalDiscount = discountToEdit ?? throw new ArgumentNullException(nameof(discountToEdit));
             this.Title = "Редактирование акции";
-            // LoadDiscountData() будет вызван в Window_Loaded
         }
-
-        // --- Загрузка окна ---
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             if (IsEditMode)
             {
-                await LoadDiscountDataAsync(); // Загружаем асинхронно
+                await LoadDiscountDataAsync();
             }
             else
             {
-                TypeComboBox.SelectedIndex = 0; // Percentage по умолчанию
+                TypeComboBox.SelectedIndex = 0;
                 IsActiveCheckBox.IsChecked = true;
-                UpdateUIVisibility(); // Обновляем видимость сразу
+                UpdateUIVisibility();
             }
             NameTextBox.Focus();
         }
-
-        // --- Асинхронная загрузка данных для редактирования ---
         private async Task LoadDiscountDataAsync()
         {
             if (_originalDiscount == null) return;
-
-            // Заполнение общих полей
             NameTextBox.Text = _originalDiscount.Name;
-            DescriptionTextBox.Text = _originalDiscount.Description; // Добавлено поле Описание
+            DescriptionTextBox.Text = _originalDiscount.Description;
             StartDatePicker.SelectedDate = _originalDiscount.StartDate;
             EndDatePicker.SelectedDate = _originalDiscount.EndDate;
             IsActiveCheckBox.IsChecked = _originalDiscount.IsActive;
-
-            // Выбор типа
             foreach (ComboBoxItem item in TypeComboBox.Items) { if (item.Content.ToString() == _originalDiscount.Type) { TypeComboBox.SelectedItem = item; break; } }
             if (TypeComboBox.SelectedItem == null) TypeComboBox.SelectedIndex = 0;
-
-            // Загрузка ID/Значений в поля
             ValueTextBox.Text = _originalDiscount.Value?.ToString(CultureInfo.CurrentCulture);
             RequiredQuantityNTextBox.Text = _originalDiscount.RequiredQuantityN?.ToString();
             GiftQuantityMTextBox.Text = _originalDiscount.GiftQuantityM?.ToString();
             NthItemNumberTextBox.Text = _originalDiscount.NthItemNumber?.ToString();
             CheckAmountThresholdTextBox.Text = _originalDiscount.CheckAmountThreshold?.ToString(CultureInfo.CurrentCulture);
-
-            // Установка RadioButton и значений для N-ного и Чека
             if (_originalDiscount.Type == "Скидка на N-ный")
             {
                 if (_originalDiscount.IsNthDiscountPercentage) NthDiscountPercentageRadio.IsChecked = true; else NthDiscountAmountRadio.IsChecked = true;
@@ -100,21 +75,16 @@ namespace NexusPoint.Windows
                 if (_originalDiscount.IsCheckDiscountPercentage) CheckDiscountPercentageRadio.IsChecked = true; else CheckDiscountAmountRadio.IsChecked = true;
                 CheckValueTextBox.Text = _originalDiscount.Value?.ToString(CultureInfo.CurrentCulture);
             }
-
-            // Асинхронная загрузка связанных товаров с помощью ProductManager
             var requiredTask = LoadProductInfoAsync(_originalDiscount.RequiredProductId, RequiredProductTextBox, RequiredProductNameText, true);
             var giftTask = LoadProductInfoAsync(_originalDiscount.GiftProductId, GiftProductTextBox, GiftProductNameText, false);
             await Task.WhenAll(requiredTask, giftTask);
 
             UpdateUIVisibility();
         }
-
-        // Вспомогательный метод для асинхронной загрузки инфо о товаре (использует _productManager)
         private async Task LoadProductInfoAsync(int? productId, TextBox codeTextBox, TextBlock nameTextBlock, bool isRequiredField)
         {
             if (!productId.HasValue)
             {
-                // Очищаем поля, если ID нет
                 codeTextBox.Text = string.Empty;
                 nameTextBlock.Text = string.Empty;
                 if (isRequiredField) _requiredProduct = null; else _giftProduct = null;
@@ -122,8 +92,6 @@ namespace NexusPoint.Windows
             }
 
             Product product = null;
-            // Используем ProductManager для поиска по ID
-            // Обернем в Task.Run, т.к. GetProductsByIdsAsync ожидает список
             var products = await _productManager.GetProductsByIdsAsync(new List<int> { productId.Value });
             product = products.FirstOrDefault();
 
@@ -135,14 +103,11 @@ namespace NexusPoint.Windows
             }
             else
             {
-                codeTextBox.Text = productId.Value.ToString(); // Показываем ID
+                codeTextBox.Text = productId.Value.ToString();
                 nameTextBlock.Text = "<Товар удален/не найден>";
                 if (isRequiredField) _requiredProduct = null; else _giftProduct = null;
             }
         }
-
-
-        // --- UI Logic (видимость, валидация) - остаются без существенных изменений ---
         private void TypeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateUIVisibility();
 
         private void UpdateUIVisibility()
@@ -194,9 +159,6 @@ namespace NexusPoint.Windows
             TextBox textBox = sender as TextBox; string newText = textBox.Text.Insert(textBox.CaretIndex, e.Text);
             Regex regex = new Regex("^[0-9]+$"); if (!regex.IsMatch(newText) && newText != "") e.Handled = true;
         }
-
-
-        // --- Поиск товаров (обновлено) ---
         private async void FindProductButton_Click(object sender, RoutedEventArgs e)
         {
             Button btn = sender as Button;
@@ -214,14 +176,12 @@ namespace NexusPoint.Windows
 
             try
             {
-                // Используем ProductManager для поиска
-                // FindByCodeOrBarcodeInternal не асинхронный, но обернем для консистентности
-                foundProduct = await Task.Run(() => _productManager.FindByCodeOrBarcodeInternal(codeOrBarcode)); // Используем новый внутренний метод
+                foundProduct = await Task.Run(() => _productManager.FindByCodeOrBarcodeInternal(codeOrBarcode));
 
                 if (foundProduct != null)
                 {
                     targetNameBlock.Text = foundProduct.Name;
-                    targetTextBox.Text = foundProduct.ProductCode; // Обновляем на код
+                    targetTextBox.Text = foundProduct.ProductCode;
                     if (isRequiredSearch) _requiredProduct = foundProduct; else _giftProduct = foundProduct;
                 }
                 else
@@ -238,32 +198,23 @@ namespace NexusPoint.Windows
                 if (isRequiredSearch) _requiredProduct = null; else _giftProduct = null;
             }
         }
-
-
-        // --- Сохранение (обновлено) ---
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
             ClearError();
-            if (!ValidateInput()) return; // Валидация остается здесь
-
-            // Создаем или обновляем объект
+            if (!ValidateInput()) return;
             Discount discountToSave = IsEditMode ? _originalDiscount : new Discount();
 
             discountToSave.Name = NameTextBox.Text.Trim();
-            discountToSave.Description = DescriptionTextBox.Text.Trim(); // Сохраняем описание
+            discountToSave.Description = DescriptionTextBox.Text.Trim();
             discountToSave.Type = (TypeComboBox.SelectedItem as ComboBoxItem).Content.ToString();
             discountToSave.StartDate = StartDatePicker.SelectedDate;
             discountToSave.EndDate = EndDatePicker.SelectedDate;
             discountToSave.IsActive = IsActiveCheckBox.IsChecked ?? false;
-
-            // Обнуляем специфичные поля перед заполнением
             discountToSave.Value = null; discountToSave.RequiredProductId = null; discountToSave.GiftProductId = null;
             discountToSave.RequiredQuantityN = null; discountToSave.GiftQuantityM = null; discountToSave.NthItemNumber = null;
             discountToSave.IsNthDiscountPercentage = false; discountToSave.CheckAmountThreshold = null; discountToSave.IsCheckDiscountPercentage = false;
 
             decimal parsedValue; int parsedInt;
-
-            // Заполняем поля в зависимости от типа
             switch (discountToSave.Type)
             {
                 case "Процент":
@@ -273,14 +224,14 @@ namespace NexusPoint.Windows
                     discountToSave.RequiredProductId = _requiredProduct?.ProductId; break;
                 case "Подарок":
                     discountToSave.RequiredProductId = _requiredProduct?.ProductId;
-                    discountToSave.GiftProductId = _giftProduct?.ProductId; break; // Должен быть найден по валидации
+                    discountToSave.GiftProductId = _giftProduct?.ProductId; break;
                 case "N+M Подарок":
-                    discountToSave.RequiredProductId = _requiredProduct?.ProductId; // Обязателен по валидации
-                    discountToSave.GiftProductId = _giftProduct?.ProductId; // Обязателен по валидации
+                    discountToSave.RequiredProductId = _requiredProduct?.ProductId;
+                    discountToSave.GiftProductId = _giftProduct?.ProductId;
                     if (int.TryParse(RequiredQuantityNTextBox.Text, out int n)) discountToSave.RequiredQuantityN = n;
                     if (int.TryParse(GiftQuantityMTextBox.Text, out int m)) discountToSave.GiftQuantityM = m; break;
                 case "Скидка на N-ный":
-                    discountToSave.RequiredProductId = _requiredProduct?.ProductId; // Обязателен по валидации
+                    discountToSave.RequiredProductId = _requiredProduct?.ProductId;
                     if (int.TryParse(NthItemNumberTextBox.Text, out int nth)) discountToSave.NthItemNumber = nth;
                     discountToSave.IsNthDiscountPercentage = NthDiscountPercentageRadio.IsChecked == true;
                     if (decimal.TryParse(NthValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue)) discountToSave.Value = Math.Round(parsedValue, 2); break;
@@ -289,17 +240,12 @@ namespace NexusPoint.Windows
                     discountToSave.IsCheckDiscountPercentage = CheckDiscountPercentageRadio.IsChecked == true;
                     if (decimal.TryParse(CheckValueTextBox.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out parsedValue)) discountToSave.Value = Math.Round(parsedValue, 2); break;
             }
-
-            // Сохранение через DiscountManager
             bool success;
             if (IsEditMode) { success = _discountManager.UpdateDiscount(discountToSave); }
             else { success = _discountManager.AddDiscount(discountToSave); }
 
             if (success) { this.DialogResult = true; }
-            // Сообщение об ошибке покажется из менеджера
         }
-
-        // --- Метод валидации (остается здесь) ---
         private bool ValidateInput()
         {
             string name = NameTextBox.Text.Trim(); string type = (TypeComboBox.SelectedItem as ComboBoxItem)?.Content.ToString();
@@ -342,10 +288,8 @@ namespace NexusPoint.Windows
                     if (CheckDiscountPercentageRadio.IsChecked == true && parsedValue > 100) { ShowError("Процент скидки не может быть больше 100."); CheckValueTextBox.Focus(); return false; }
                     break;
             }
-            return true; // Валидация пройдена
+            return true;
         }
-
-        // --- Вспомогательные ---
         private void ShowError(string message) { ErrorText.Text = message; ErrorText.Visibility = Visibility.Visible; }
         private void ClearError() { ErrorText.Text = string.Empty; ErrorText.Visibility = Visibility.Collapsed; }
     }

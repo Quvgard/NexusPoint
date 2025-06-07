@@ -4,8 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 
 namespace NexusPoint.BusinessLogic
@@ -16,9 +14,7 @@ namespace NexusPoint.BusinessLogic
         public List<CheckItem> DiscountedItems { get; set; } = new List<CheckItem>();
         public List<CheckItem> GiftsToAdd { get; set; } = new List<CheckItem>();
         public Discount AppliedCheckDiscount { get; set; } = null;
-        // Добавим флаг, была ли применена процентная скидка на чек
         public bool IsCheckDiscountPercentage { get; set; } = false;
-        // Добавим значение скидки на чек для распределения
         public decimal? CheckDiscountValue { get; set; } = null;
     }
 
@@ -58,15 +54,14 @@ namespace NexusPoint.BusinessLogic
             ApplyBestOfferPerUnit(workingItems, activeDiscounts, result.GiftsToAdd);
             GenerateNxMGifts(workingItems, activeDiscounts, result.GiftsToAdd);
 
-            // Изменяем ApplyCheckLevelDiscounts, чтобы он возвращал информацию о скидке
             var checkDiscountInfo = FindBestCheckLevelDiscount(workingItems, activeDiscounts);
             if (checkDiscountInfo != null)
             {
                 result.AppliedCheckDiscount = checkDiscountInfo.Discount;
                 result.IsCheckDiscountPercentage = checkDiscountInfo.IsPercentage;
-                result.CheckDiscountValue = checkDiscountInfo.Value; // Сохраняем значение для распределения
+                result.CheckDiscountValue = checkDiscountInfo.Value;
 
-                ApplyCheckLevelDistribution(workingItems, result); // Выносим распределение
+                ApplyCheckLevelDistribution(workingItems, result);
             }
 
 
@@ -163,19 +158,17 @@ namespace NexusPoint.BusinessLogic
 
                 foreach (var discount in applicableItemDiscounts)
                 {
-                    // Обрабатываем скидку "Сумма" здесь, применяя ее на всю позицию, если она выгоднее
                     if (discount.Type == "Сумма" && discount.Value.HasValue && discount.Value > 0)
                     {
                         decimal positionTotalBeforeDiscount = item.Quantity * item.PriceAtSale;
                         decimal potentialDiscountAmount = Math.Min(positionTotalBeforeDiscount, discount.Value.Value);
-                        if (potentialDiscountAmount > bestMonetaryDiscountPerUnit * item.Quantity) // Сравниваем общую скидку
+                        if (potentialDiscountAmount > bestMonetaryDiscountPerUnit * item.Quantity)
                         {
-                            // Вычисляем эквивалентную скидку на единицу для сравнения и возможного применения
                             bestMonetaryDiscountPerUnit = item.Quantity > 0 ? potentialDiscountAmount / item.Quantity : 0;
                             bestMonetaryDiscountInfo = discount;
                         }
                     }
-                    else // Процент или фикс. цена
+                    else
                     {
                         decimal potentialDiscountPerUnit = CalculateSingleUnitPriceDiscount(item.PriceAtSale, discount);
                         if (potentialDiscountPerUnit > bestMonetaryDiscountPerUnit)
@@ -224,7 +217,6 @@ namespace NexusPoint.BusinessLogic
 
         private static decimal CalculateSingleUnitPriceDiscount(decimal priceAtSale, Discount discount)
         {
-            // Этот метод теперь считает только для % и фикс. цены
             decimal discountAmount = 0m;
             if (!discount.Value.HasValue || discount.Value.Value <= 0) return 0m;
 
@@ -288,7 +280,6 @@ namespace NexusPoint.BusinessLogic
             }
         }
 
-        // Вспомогательный класс для возврата информации о лучшей скидке на чек
         private class CheckDiscountInfo
         {
             public Discount Discount { get; set; }
@@ -302,7 +293,7 @@ namespace NexusPoint.BusinessLogic
             var checkDiscountRules = activeDiscounts.Where(d => d.Type == "Скидка на сумму чека").ToList();
             if (!checkDiscountRules.Any()) return null;
 
-            decimal currentCheckTotal = workingItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount); // Сумма ПОСЛЕ скидок на позиции
+            decimal currentCheckTotal = workingItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount);
             if (currentCheckTotal <= 0) return null;
 
             CheckDiscountInfo bestOffer = null;
@@ -334,8 +325,8 @@ namespace NexusPoint.BusinessLogic
                         {
                             Discount = discount,
                             IsPercentage = isPercentage,
-                            Value = discountValue, // Сохраняем значение скидки (процент или сумма)
-                            CalculatedAmount = potentialDiscountAmount // Сохраняем РАССЧИТАННУЮ сумму скидки
+                            Value = discountValue,
+                            CalculatedAmount = potentialDiscountAmount
                         };
                     }
                 }
@@ -348,10 +339,9 @@ namespace NexusPoint.BusinessLogic
             if (result.AppliedCheckDiscount == null || !result.CheckDiscountValue.HasValue) return;
 
             decimal totalCheckDiscountToApply = 0m;
-            decimal currentCheckTotal = workingItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount); // Сумма до скидки на чек
+            decimal currentCheckTotal = workingItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount);
             if (currentCheckTotal <= 0) return;
 
-            // Рассчитываем сумму скидки на чек на основе сохраненного значения
             if (result.IsCheckDiscountPercentage)
             {
                 totalCheckDiscountToApply = currentCheckTotal * (Math.Min(100, result.CheckDiscountValue.Value) / 100m);
@@ -365,12 +355,11 @@ namespace NexusPoint.BusinessLogic
             if (totalCheckDiscountToApply <= 0) return;
 
 
-            // Распределение
-            decimal checkTotalForDistribution = workingItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount); // Сумма для долей
+            decimal checkTotalForDistribution = workingItems.Sum(i => i.Quantity * i.PriceAtSale - i.DiscountAmount);
             if (checkTotalForDistribution <= 0) return;
 
             decimal distributedSum = 0m;
-            // Распределяем только по тем позициям, где сумма положительная
+
             var itemsForDistribution = workingItems.Where(i => (i.Quantity * i.PriceAtSale - i.DiscountAmount) > 0).ToList();
             if (!itemsForDistribution.Any()) return;
 
@@ -388,20 +377,18 @@ namespace NexusPoint.BusinessLogic
 
                 if (i == itemsForDistribution.Count - 1)
                 {
-                    discountPortion = totalCheckDiscountToApply - distributedSum; // Остаток на последнюю позицию
+                    discountPortion = totalCheckDiscountToApply - distributedSum;
                 }
                 else
                 {
                     discountPortion = Math.Round(totalCheckDiscountToApply * itemShare, 2);
                 }
-
-                // Добавляем к существующей скидке
-                decimal discountToAdd = Math.Max(0, Math.Min(itemCurrentAmount, discountPortion)); // Не больше, чем текущая сумма позиции
+                decimal discountToAdd = Math.Max(0, Math.Min(itemCurrentAmount, discountPortion));
 
                 if (discountToAdd > 0)
                 {
                     item.DiscountAmount += discountToAdd;
-                    item.AppliedDiscountId = result.AppliedCheckDiscount.DiscountId; // Перезаписываем ID
+                    item.AppliedDiscountId = result.AppliedCheckDiscount.DiscountId;
                     distributedSum += discountToAdd;
                 }
             }
@@ -412,10 +399,8 @@ namespace NexusPoint.BusinessLogic
         {
             foreach (var item in items)
             {
-                // Убедимся, что скидка не превышает цену * кол-во
                 decimal maxPossibleDiscount = item.Quantity * item.PriceAtSale;
                 item.DiscountAmount = Math.Max(0, Math.Min(maxPossibleDiscount, item.DiscountAmount));
-                // Пересчитываем итоговую сумму
                 item.ItemTotalAmount = Math.Round(item.Quantity * item.PriceAtSale - item.DiscountAmount, 2);
             }
         }

@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NexusPoint.Models
 {
@@ -10,10 +6,7 @@ namespace NexusPoint.Models
     {
         public int StockItemId { get; set; }
         public int ProductId { get; set; }
-        public decimal Quantity { get; set; } // decimal для точности
+        public decimal Quantity { get; set; }
         public DateTime LastUpdated { get; set; }
-
-        // Навигационное свойство (опционально, для удобства)
-        // public Product Product { get; set; }
     }
 }

@@ -1,8 +1,7 @@
 ﻿using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
-using NexusPoint.Utils.Converters;
 using NexusPoint.Utils;
-using NexusPoint.Windows;
+using NexusPoint.Utils.Converters;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -25,25 +24,20 @@ namespace NexusPoint.BusinessLogic
         public Check OriginalCheck
         {
             get => _originalCheck;
-            private set { _originalCheck = value; OnPropertyChanged(); } // Уведомляем об изменении
+            private set { _originalCheck = value; OnPropertyChanged(); }
         }
 
         private ObservableCollection<ReturnItemView> _returnItems = new ObservableCollection<ReturnItemView>();
-        // Публичное свойство для привязки
         public ReadOnlyObservableCollection<ReturnItemView> ReturnItems { get; }
 
         private string _calculatedReturnMethod = "-";
         public string CalculatedReturnMethod
         {
             get => _calculatedReturnMethod;
-            private set { _calculatedReturnMethod = value; OnPropertyChanged(); } // Уведомляем
+            private set { _calculatedReturnMethod = value; OnPropertyChanged(); }
         }
-
-        // Свойства для привязки итогов и состояния кнопки
         public decimal TotalReturnAmount => Math.Round(_returnItems.Sum(item => item.ReturnItemTotalAmount), 2);
         public bool CanProcessReturn => TotalReturnAmount > 0;
-
-        // Событие INotifyPropertyChanged
         public event PropertyChangedEventHandler PropertyChanged;
 
         public ReturnManager(CheckRepository checkRepository, ProductRepository productRepository, StockItemRepository stockItemRepository)
@@ -56,7 +50,7 @@ namespace NexusPoint.BusinessLogic
 
         public async Task<bool> FindOriginalCheckAsync(int checkNumber, int shiftNumber)
         {
-            ClearCurrentReturn(); // Очищаем перед поиском
+            ClearCurrentReturn();
             try
             {
                 var foundCheck = await Task.Run(() => _checkRepository.FindCheckByNumberAndShift(checkNumber, shiftNumber));
@@ -66,15 +60,11 @@ namespace NexusPoint.BusinessLogic
                 {
                     throw new InvalidOperationException($"Чек №{checkNumber} уже является чеком возврата.");
                 }
-
-                // Загружаем детали для отображения
                 List<int> productIds = foundCheck.Items.Select(i => i.ProductId).Distinct().ToList();
                 var products = (await Task.Run(() => _productRepository.GetProductsByIds(productIds)))
                                .ToDictionary(p => p.ProductId);
-
-                // Отписываемся от старых перед добавлением новых
                 foreach (var item in _returnItems) item.PropertyChanged -= ItemView_PropertyChanged;
-                _returnItems.Clear(); // Очищаем коллекцию
+                _returnItems.Clear();
 
                 foreach (var item in foundCheck.Items)
                 {
@@ -84,14 +74,14 @@ namespace NexusPoint.BusinessLogic
                     _returnItems.Add(itemView);
                 }
 
-                OriginalCheck = foundCheck; // Устанавливаем найденный чек ПОСЛЕ заполнения _returnItems
-                RecalculateTotalsAndMethod(); // Пересчитываем итоги и метод один раз
+                OriginalCheck = foundCheck;
+                RecalculateTotalsAndMethod();
                 return true;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка поиска чека: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                ClearCurrentReturn(); // Очищаем в случае ошибки
+                ClearCurrentReturn();
                 return false;
             }
         }
@@ -100,17 +90,14 @@ namespace NexusPoint.BusinessLogic
         {
             if (e.PropertyName == nameof(ReturnItemView.ReturnQuantity))
             {
-                RecalculateTotalsAndMethod(); // Пересчитываем при изменении количества
+                RecalculateTotalsAndMethod();
             }
         }
-
-        // Объединенный метод пересчета
         private void RecalculateTotalsAndMethod()
         {
-            CalculateReturnMethod(); // Сначала метод
-            OnPropertyChanged(nameof(TotalReturnAmount)); // Затем уведомляем об изменении свойств
+            CalculateReturnMethod();
+            OnPropertyChanged(nameof(TotalReturnAmount));
             OnPropertyChanged(nameof(CanProcessReturn));
-            // CalculatedReturnMethod уже вызовет OnPropertyChanged сам
         }
 
 
@@ -134,7 +121,6 @@ namespace NexusPoint.BusinessLogic
                 {
                     bool isSelected = selectedItems.Any(si => si.OriginalItem.CheckItemId == item.OriginalItem.CheckItemId);
                     if (isSelected) item.ReturnQuantity = returnFullQuantity ? item.Quantity : 0;
-                    // else { item.ReturnQuantity = 0; } // Раскомментировать, если нужно сбрасывать невыбранные
                 }
             }
             foreach (var item in _returnItems) item.PropertyChanged += ItemView_PropertyChanged;
@@ -146,8 +132,8 @@ namespace NexusPoint.BusinessLogic
         {
             foreach (var item in _returnItems) item.PropertyChanged -= ItemView_PropertyChanged;
             _returnItems.Clear();
-            OriginalCheck = null; // Вызовет OnPropertyChanged
-            RecalculateTotalsAndMethod(); // Обновит остальные связанные свойства
+            OriginalCheck = null;
+            RecalculateTotalsAndMethod();
         }
 
         private void CalculateReturnMethod()
@@ -168,10 +154,9 @@ namespace NexusPoint.BusinessLogic
                 }
                 else { newMethod = "Наличными (неизв. тип оплаты)"; }
             }
-            // Устанавливаем значение и вызываем OnPropertyChanged только если оно изменилось
             if (_calculatedReturnMethod != newMethod)
             {
-                CalculatedReturnMethod = newMethod; // Свойство само вызовет OnPropertyChanged
+                CalculatedReturnMethod = newMethod;
             }
         }
 
@@ -264,8 +249,6 @@ namespace NexusPoint.BusinessLogic
                     PrintCashExpenseOrder(savedReturnCheck, amountToReturnInCash, currentUser);
                     PrinterService.OpenCashDrawer();
                 }
-
-                // Очищаем состояние только после ПОЛНОГО успеха
                 ClearCurrentReturn();
                 return true;
             }
@@ -277,7 +260,7 @@ namespace NexusPoint.BusinessLogic
         {
             StringBuilder checkSb = new StringBuilder();
             checkSb.AppendLine($"--- Чек Возврата №{returnCheck.CheckNumber} ---");
-            if (OriginalCheck != null) // Добавим проверку
+            if (OriginalCheck != null)
                 checkSb.AppendLine($"Основание: Чек продажи №{OriginalCheck.CheckNumber} от {OriginalCheck.Timestamp:d}");
             checkSb.AppendLine($"Кассир: {cashier.FullName}");
             checkSb.AppendLine($"Дата: {returnCheck.Timestamp:G}");
@@ -298,7 +281,7 @@ namespace NexusPoint.BusinessLogic
             checkSb.AppendLine("---------------------------------");
             checkSb.AppendLine($"ИТОГО К ВОЗВРАТУ: {returnCheck.TotalAmount:C}");
 
-            string returnMethod = CalculatedReturnMethod; // Используем свойство
+            string returnMethod = CalculatedReturnMethod;
             if (returnMethod == "Карта + Наличные") checkSb.AppendLine("ВОЗВРАТ: КАРТА + НАЛИЧНЫЕ");
             else if (returnMethod == "На карту") checkSb.AppendLine("ВОЗВРАТ НА КАРТУ");
             else checkSb.AppendLine("ВОЗВРАТ НАЛИЧНЫМИ");
@@ -317,7 +300,7 @@ namespace NexusPoint.BusinessLogic
             rkoSb.AppendLine("-------------------------------------------------------------");
             rkoSb.AppendLine($"Выдать:         _____________________________________________");
             rkoSb.AppendLine($"                              (Ф.И.О.)");
-            if (OriginalCheck != null) // Добавим проверку
+            if (OriginalCheck != null)
                 rkoSb.AppendLine($"Основание:      Возврат товара по чеку №{OriginalCheck.CheckNumber} от {OriginalCheck.Timestamp:d}");
             else
                 rkoSb.AppendLine($"Основание:      Возврат товара по чеку возврата №{returnCheck.CheckNumber}");

@@ -10,8 +10,6 @@ using System.Windows;
 
 namespace NexusPoint.BusinessLogic
 {
-    // Модель CheckDisplayView переносим сюда или в Models/ViewModels
-    // Оставляем пока здесь для простоты
     public class CheckDisplayView : Check
     {
         public User Cashier { get; set; }
@@ -40,19 +38,12 @@ namespace NexusPoint.BusinessLogic
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _discountRepository = discountRepository ?? throw new ArgumentNullException(nameof(discountRepository));
         }
-
-        /// <summary>
-        /// Находит чек по номеру и смене и возвращает его с загруженными данными.
-        /// </summary>
         public async Task<CheckDisplayView> FindCheckAsync(int checkNumber, int shiftNumber)
         {
             try
             {
-                // Используем Task.Run для асинхронного выполнения поиска
                 Check foundCheck = await Task.Run(() => _checkRepository.FindCheckByNumberAndShift(checkNumber, shiftNumber));
                 if (foundCheck == null) return null;
-
-                // Загружаем связанные данные
                 return await LoadCheckDetailsAsync(foundCheck);
             }
             catch (Exception ex)
@@ -61,10 +52,6 @@ namespace NexusPoint.BusinessLogic
                 return null;
             }
         }
-
-        /// <summary>
-        /// Получает последний чек и возвращает его с загруженными данными.
-        /// </summary>
         public async Task<CheckDisplayView> GetLastCheckAsync()
         {
             try
@@ -80,20 +67,11 @@ namespace NexusPoint.BusinessLogic
                 return null;
             }
         }
-
-        /// <summary>
-        /// Загружает связанные данные (Кассир, Смена, Позиции) для чека.
-        /// </summary>
         private async Task<CheckDisplayView> LoadCheckDetailsAsync(Check check)
         {
             if (check == null) return null;
-
-            // Используем Task.WhenAll для параллельной загрузки
             var cashierTask = Task.Run(() => _userRepository.GetUserById(check.UserId));
             var shiftTask = Task.Run(() => _shiftRepository.GetShiftById(check.ShiftId));
-            // Позиции должны быть уже загружены методами репозитория чеков
-
-            // Убедимся, что позиции загружены
             if (check.Items == null || !check.Items.Any())
             {
                 check.Items = await Task.Run(() => _checkRepository.GetCheckItemsByCheckId(check.CheckId));
@@ -104,7 +82,6 @@ namespace NexusPoint.BusinessLogic
 
             var view = new CheckDisplayView
             {
-                // Копируем свойства из Check
                 CheckId = check.CheckId,
                 ShiftId = check.ShiftId,
                 CheckNumber = check.CheckNumber,
@@ -117,16 +94,12 @@ namespace NexusPoint.BusinessLogic
                 DiscountAmount = check.DiscountAmount,
                 IsReturn = check.IsReturn,
                 OriginalCheckId = check.OriginalCheckId,
-                Items = check.Items ?? new List<CheckItem>(), // Гарантируем не null список
-
-                // Добавляем связанные данные
+                Items = check.Items ?? new List<CheckItem>(),
                 Cashier = cashierTask.Result,
                 Shift = shiftTask.Result
             };
             return view;
         }
-
-        // --- Методы форматирования строк для печати ---
 
         public async Task<string> FormatCheckCopyAsync(CheckDisplayView check)
         {
@@ -157,7 +130,7 @@ namespace NexusPoint.BusinessLogic
             sb.AppendLine("---------------------------------");
             sb.AppendLine($"ПОДЫТОГ: {(check.TotalAmount + check.DiscountAmount).ToString("N2", _culture)}");
             if (check.DiscountAmount > 0) sb.AppendLine($"СКИДКА НА ЧЕК: {check.DiscountAmount.ToString("N2", _culture)}");
-            sb.AppendLine($"ИТОГО: {check.TotalAmount.ToString("C", _culture)}"); // Итого с символом валюты
+            sb.AppendLine($"ИТОГО: {check.TotalAmount.ToString("C", _culture)}");
             sb.AppendLine("---------------------------------");
             string paymentTypeText = check.PaymentType == "Cash" ? "НАЛИЧНЫМИ" : check.PaymentType == "Card" ? "КАРТОЙ" : "СМЕШАННАЯ";
             sb.AppendLine($"ОПЛАТА ({paymentTypeText}): {check.TotalAmount.ToString("C", _culture)}");
@@ -237,7 +210,7 @@ namespace NexusPoint.BusinessLogic
             bool detailsFound = false;
             foreach (var item in check.Items)
             {
-                if (item.AppliedDiscountId.HasValue && item.DiscountAmount > 0) // Смотрим на скидку по позиции
+                if (item.AppliedDiscountId.HasValue && item.DiscountAmount > 0)
                 {
                     string discountName = discountsInfo.TryGetValue(item.AppliedDiscountId.Value, out Discount discount) ? discount.Name : $"<Скидка ID: {item.AppliedDiscountId.Value}>";
                     string productName = productsInfo.TryGetValue(item.ProductId, out Product product) ? product.Name : "<Товар?>";
@@ -246,15 +219,11 @@ namespace NexusPoint.BusinessLogic
                     detailsFound = true;
                 }
             }
-
-            // Проверяем, была ли скидка на чек, не привязанная к конкретной позиции
-            // Это можно определить, если общая скидка больше суммы скидок по позициям с AppliedDiscountId
             decimal itemDiscountsSum = check.Items.Where(i => i.AppliedDiscountId.HasValue).Sum(i => i.DiscountAmount);
             decimal checkLevelDiscount = check.DiscountAmount - itemDiscountsSum;
 
-            if (checkLevelDiscount > 0.001m) // Если есть необъясненная скидка, считаем ее скидкой на чек
+            if (checkLevelDiscount > 0.001m)
             {
-                // Пытаемся найти ID скидки на чек (если она была сохранена в AppliedDiscountId хотя бы одной позиции)
                 int? checkDiscountId = check.Items.FirstOrDefault(i => i.AppliedDiscountId.HasValue && discountsInfo.ContainsKey(i.AppliedDiscountId.Value) && discountsInfo[i.AppliedDiscountId.Value].Type == "Скидка на сумму чека")?.AppliedDiscountId;
                 string checkDiscountName = "<Общая скидка на чек>";
                 if (checkDiscountId.HasValue && discountsInfo.TryGetValue(checkDiscountId.Value, out Discount cd))

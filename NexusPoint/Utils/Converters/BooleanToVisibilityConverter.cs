@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Data;
 using System.Windows;
+using System.Windows.Data;
 
 namespace NexusPoint.Utils.Converters
 {
@@ -19,13 +15,11 @@ namespace NexusPoint.Utils.Converters
             {
                 boolValue = b;
             }
-            else if (value is bool?) // Также обрабатываем Nullable<bool>
+            else if (value is bool?)
             {
                 bool? nullableBool = (bool?)value;
                 boolValue = nullableBool.HasValue && nullableBool.Value;
             }
-
-            // Обработка параметра для инвертирования
             bool invert = false;
             if (parameter is string strParam)
             {
@@ -40,8 +34,6 @@ namespace NexusPoint.Utils.Converters
             {
                 boolValue = !boolValue;
             }
-
-            // Определение видимости для False (по умолчанию Collapsed)
             Visibility falseVisibility = Visibility.Collapsed;
             if (parameter is string strParamVisibility)
             {
@@ -56,12 +48,9 @@ namespace NexusPoint.Utils.Converters
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            // Обычно ConvertBack не нужен для этого конвертера
             if (value is Visibility visibility)
             {
                 bool baseValue = visibility == Visibility.Visible;
-
-                // Обработка параметра инвертирования при обратном преобразовании
                 bool invert = false;
                 if (parameter is string strParam)
                 {
@@ -74,7 +63,7 @@ namespace NexusPoint.Utils.Converters
 
                 return invert ? !baseValue : baseValue;
             }
-            return DependencyProperty.UnsetValue; // Или false по умолчанию
+            return DependencyProperty.UnsetValue;
         }
     }
 }

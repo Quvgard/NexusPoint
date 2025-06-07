@@ -1,10 +1,6 @@
 ﻿using Dapper;
 using System;
-using System.Collections.Generic;
 using System.Data.SQLite;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 
 namespace NexusPoint.Data
@@ -13,15 +9,10 @@ namespace NexusPoint.Data
     {
         public static void CreateTables()
         {
-            // Используем using для гарантии закрытия соединения
             using (var connection = DatabaseHelper.GetConnection())
             {
                 try
                 {
-                    // Открывать соединение не нужно, Dapper сделает это сам.
-                    // DatabaseHelper уже открывал для PRAGMA.
-
-                    // --- Таблица Пользователей ---
                     connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS Users (
                         UserId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,8 +22,6 @@ namespace NexusPoint.Data
                         Role TEXT NOT NULL CHECK(Role IN ('Cashier', 'Manager', 'Admin'))
                     );");
                     System.Diagnostics.Debug.WriteLine("Users table checked/created.");
-
-                    // --- Таблица Товаров (Каталог) ---
                     connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS Products (
                         ProductId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,8 +32,6 @@ namespace NexusPoint.Data
                         Price REAL NOT NULL
                     );");
                     System.Diagnostics.Debug.WriteLine("Products (Catalog) table checked/created.");
-
-                    // --- Таблица Остатков Товаров ---
                     connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS StockItems (
                         StockItemId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,8 +41,6 @@ namespace NexusPoint.Data
                         FOREIGN KEY (ProductId) REFERENCES Products(ProductId) ON DELETE CASCADE
                     );");
                     System.Diagnostics.Debug.WriteLine("StockItems table checked/created.");
-
-                    // --- Таблица Смен ---
                     connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS Shifts (
                         ShiftId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,8 +64,6 @@ namespace NexusPoint.Data
                         FOREIGN KEY (ClosingUserId) REFERENCES Users(UserId)
                     );");
                     System.Diagnostics.Debug.WriteLine("Shifts table checked/created.");
-
-                    // --- Таблица Операций с Денежным Ящиком ---
                     connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS CashDrawerOperations (
                         OperationId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,8 +77,6 @@ namespace NexusPoint.Data
                         FOREIGN KEY (UserId) REFERENCES Users(UserId)
                     );");
                     System.Diagnostics.Debug.WriteLine("CashDrawerOperations table checked/created.");
-
-                    // --- Таблица Чеков --- (С добавленной ShiftId)
                     connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS Checks (
                         CheckId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,8 +95,6 @@ namespace NexusPoint.Data
                         FOREIGN KEY (ShiftId) REFERENCES Shifts(ShiftId) -- <<--- Связь со сменой
                     );");
                     System.Diagnostics.Debug.WriteLine("Checks table checked/created.");
-
-                    // --- Таблица Позиций Чека --- (Без изменений структуры)
                     connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS CheckItems (
                         CheckItemId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,8 +110,6 @@ namespace NexusPoint.Data
                         FOREIGN KEY (AppliedDiscountId) REFERENCES Discounts(DiscountId) ON DELETE SET NULL 
                     );");
                     System.Diagnostics.Debug.WriteLine("CheckItems table checked/created.");
-
-                    // --- Таблица Акций/Скидок --- 
                     connection.Execute(@"
                     CREATE TABLE Discounts (
                         DiscountId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,44 +132,33 @@ namespace NexusPoint.Data
                         FOREIGN KEY (GiftProductId) REFERENCES Products(ProductId) ON DELETE SET NULL
                     );");
                     System.Diagnostics.Debug.WriteLine("Discounts table re-created.");
-
-                    // Здесь можно добавить создание начальных данных, если нужно
-                    // Например, пользователя Admin
                     CreateDefaultAdminUser(connection);
 
                 }
-                catch (Exception ex) // Ловим более общее исключение
+                catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"Database initialization error: {ex.Message}\n{ex.StackTrace}");
-                    // В реальном приложении - логирование и, возможно, сообщение пользователю
                     MessageBox.Show($"Ошибка инициализации базы данных: {ex.Message}", "Критическая ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    // Возможно, стоит завершить приложение, если БД не создалась
                     Application.Current.Shutdown();
-                    // throw; // Можно не пробрасывать, если обработали и завершаем
                 }
             }
         }
-
-        // Пример добавления админа по умолчанию (вызывать из CreateTables, если нужно)
         private static void CreateDefaultAdminUser(SQLiteConnection connection)
         {
-            // Проверить, существует ли уже хоть один пользователь (или конкретно admin)
             var userExists = connection.QueryFirstOrDefault<int>(
-                "SELECT COUNT(*) FROM Users WHERE Username = @Username", new { Username = "admin" }); // Ищем конкретно admin
+                "SELECT COUNT(*) FROM Users WHERE Username = @Username", new { Username = "admin" });
 
             if (userExists == 0)
             {
-                // Проверяем, существует ли вообще класс PasswordHasher
                 if (typeof(Utils.PasswordHasher).GetMethod("HashPassword") == null)
                 {
                     System.Diagnostics.Debug.WriteLine("ERROR: PasswordHasher.HashPassword method not found. Cannot create default user.");
-                    // Можно показать MessageBox или просто пропустить создание
                     MessageBox.Show("Не найден метод хеширования пароля. Пользователь по умолчанию не создан.", "Ошибка инициализации", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return; // Выходим, не создавая пользователя
+                    return;
                 }
 
                 string defaultUsername = "admin";
-                string defaultPassword = "admin"; // Используйте более сложный, если хотите
+                string defaultPassword = "admin";
                 string hashedPassword = Utils.PasswordHasher.HashPassword(defaultPassword);
 
                 connection.Execute(@"
@@ -203,10 +169,9 @@ namespace NexusPoint.Data
                         Username = defaultUsername,
                         HashedPassword = hashedPassword,
                         FullName = "Администратор Системы",
-                        Role = "Admin" // Даем роль Admin
+                        Role = "Admin"
                     });
                 System.Diagnostics.Debug.WriteLine($"Default admin user created (Username: {defaultUsername}, Password: {defaultPassword}).");
-                // Можно вывести сообщение пользователю о создании учетки
                 MessageBox.Show($"Создана учетная запись администратора по умолчанию:\nЛогин: {defaultUsername}\nПароль: {defaultPassword}\n\nРекомендуется сменить пароль после первого входа.",
                                 "Пользователь по умолчанию", MessageBoxButton.OK, MessageBoxImage.Information);
             }

@@ -1,7 +1,6 @@
 ﻿using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
 using NexusPoint.Utils;
-using NexusPoint.Windows;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +15,6 @@ namespace NexusPoint.BusinessLogic
         private readonly CheckRepository _checkRepository;
         private readonly ProductRepository _productRepository;
         private readonly StockItemRepository _stockItemRepository;
-        // DiscountCalculator используется статически
 
         public PaymentProcessor(CheckRepository checkRepository, ProductRepository productRepository, StockItemRepository stockItemRepository)
         {
@@ -24,22 +22,9 @@ namespace NexusPoint.BusinessLogic
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _stockItemRepository = stockItemRepository ?? throw new ArgumentNullException(nameof(stockItemRepository));
         }
-
-        /// <summary>
-        /// Обрабатывает оплату чека: применяет автоматические скидки, сохраняет чек, печатает его.
-        /// </summary>
-        /// <param name="currentItemsView">Текущие позиции чека из SaleManager.</param>
-        /// <param name="isManualDiscountApplied">Флаг, была ли применена ручная скидка.</param>
-        /// <param name="currentShift">Текущая открытая смена.</param>
-        /// <param name="currentUser">Текущий пользователь.</param>
-        /// <param name="paymentType">Выбранный тип оплаты ("Cash", "Card", "Mixed").</param>
-        /// <param name="cashPaid">Сумма, полученная наличными.</param>
-        /// <param name="cardPaid">Сумма, оплаченная картой (рассчитанная в PaymentDialog).</param>
-        /// <param name="change">Сдача (рассчитанная в PaymentDialog).</param>
-        /// <returns>Объект сохраненного чека или null в случае ошибки/отмены.</returns>
         public async Task<Check> ProcessPaymentAsync(
-            IEnumerable<CheckItemView> currentItemsView, // Теперь это УЖЕ элементы с примененными скидками
-            bool isManualDiscountApplied, // Этот флаг больше не используется для расчета, но может быть полезен для логов
+            IEnumerable<CheckItemView> currentItemsView,
+            bool isManualDiscountApplied,
             Shift currentShift,
             User currentUser,
             string paymentType,
@@ -47,33 +32,17 @@ namespace NexusPoint.BusinessLogic
             decimal cardPaid,
             decimal change)
         {
-            // ... (проверки currentShift, currentUser, currentItemsView) ...
-
-            // --- УДАЛЕНО: Расчет автоматических скидок здесь больше не нужен ---
-            // DiscountCalculationResult discountResult = null;
-            // List<CheckItem> itemsToSave;
-            // if (!isManualDiscountApplied) { ... вызов DiscountCalculator ... }
-            // else { ... }
-            // --- КОНЕЦ УДАЛЕНИЯ ---
-
-            // 1. Используем переданные элементы как основу для сохранения
             List<CheckItem> itemsToSave = currentItemsView.Select(civ => new CheckItem
             {
-                // Копируем данные из CheckItemView в CheckItem
                 ProductId = civ.ProductId,
                 Quantity = civ.Quantity,
                 PriceAtSale = civ.PriceAtSale,
                 DiscountAmount = civ.DiscountAmount,
                 AppliedDiscountId = civ.AppliedDiscountId,
-                ItemTotalAmount = civ.CalculatedItemTotalAmount // Берем рассчитанную сумму
+                ItemTotalAmount = civ.CalculatedItemTotalAmount
             }).ToList();
-
-
-            // 2. Пересчитываем финальные итоги (на всякий случай, хотя они должны совпадать с SaleManager)
             decimal finalTotalDiscount = Math.Round(itemsToSave.Sum(i => i.DiscountAmount), 2);
             decimal finalTotalAmount = Math.Round(itemsToSave.Sum(i => i.ItemTotalAmount), 2);
-
-            // 3. Проверка нулевой суммы (если это не только подарки)
             bool hasNonGiftItems = itemsToSave.Any(i => i.PriceAtSale > 0);
             if (finalTotalAmount <= 0 && hasNonGiftItems)
             {
@@ -81,48 +50,40 @@ namespace NexusPoint.BusinessLogic
                                    "Нулевая сумма", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (freeResult == MessageBoxResult.No)
                 {
-                    return null; // Отмена
+                    return null;
                 }
-                // Если Да - сохраняем чек как оплаченный Наличными 0
                 paymentType = "Cash";
                 cashPaid = 0;
                 cardPaid = 0;
                 change = 0;
             }
-            else if (!hasNonGiftItems && itemsToSave.Any()) // Только подарки
+            else if (!hasNonGiftItems && itemsToSave.Any())
             {
-                // Если в чеке только подарки (сумма 0), нужно ли их сохранять? Зависит от требований.
-                // Пока будем сохранять.
-                paymentType = "Cash"; // Условно
+                paymentType = "Cash";
                 cashPaid = 0;
                 cardPaid = 0;
                 change = 0;
             }
-            else if (!itemsToSave.Any()) // Если список пуст (маловероятно)
+            else if (!itemsToSave.Any())
             {
                 MessageBox.Show("В чеке нет позиций для сохранения.", "Пустой чек", MessageBoxButton.OK, MessageBoxImage.Information);
                 return null;
             }
-
-
-            // 4. Формируем объект чека для сохранения
             var checkToSave = new Check
             {
                 ShiftId = currentShift.ShiftId,
                 CheckNumber = _checkRepository.GetNextCheckNumber(currentShift.ShiftId),
                 Timestamp = DateTime.Now,
                 UserId = currentUser.UserId,
-                TotalAmount = finalTotalAmount, // <--- Используем пересчитанную сумму
+                TotalAmount = finalTotalAmount,
                 PaymentType = paymentType,
                 CashPaid = cashPaid,
                 CardPaid = cardPaid,
-                DiscountAmount = finalTotalDiscount, // <--- Используем пересчитанную скидку
+                DiscountAmount = finalTotalDiscount,
                 IsReturn = false,
                 OriginalCheckId = null,
                 Items = itemsToSave
             };
-
-            // 5. Сохранение чека и печать
             try
             {
                 var savedCheck = await Task.Run(() => _checkRepository.AddCheck(checkToSave));
@@ -144,21 +105,17 @@ namespace NexusPoint.BusinessLogic
                 return null;
             }
         }
-
-        // Метод для печати чека продажи
         private async Task PrintSaleReceiptAsync(Check check, User cashier, decimal change)
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine($"--- Чек №{check.CheckNumber} ---");
-            sb.AppendLine($"ООО \"NexusPoint\""); // Пример
+            sb.AppendLine($"ООО \"NexusPoint\"");
             sb.AppendLine($"Кассир: {cashier.FullName}");
-            sb.AppendLine($"ИНН: 1234567890   ЗН ККТ: 00012345"); // Пример
-            sb.AppendLine($"Смена №: {check.ShiftId}   Чек №: {check.CheckNumber}"); // TODO: Подгрузить номер смены?
+            sb.AppendLine($"ИНН: 1234567890   ЗН ККТ: 00012345");
+            sb.AppendLine($"Смена №: {check.ShiftId}   Чек №: {check.CheckNumber}");
             sb.AppendLine($"{check.Timestamp:G}");
             sb.AppendLine(check.IsReturn ? "*** ВОЗВРАТ ПРИХОДА ***" : "*** ПРИХОД ***");
             sb.AppendLine("---------------------------------");
-
-            // Загрузка названий товаров
             var productIds = check.Items.Select(i => i.ProductId).Distinct().ToList();
             var products = (await Task.Run(() => _productRepository.GetProductsByIds(productIds)))
                            .ToDictionary(p => p.ProductId);
@@ -175,7 +132,7 @@ namespace NexusPoint.BusinessLogic
                 sb.AppendLine($"  ИТОГ ПО ПОЗИЦИИ: {item.ItemTotalAmount:N2}");
             }
             sb.AppendLine("---------------------------------");
-            sb.AppendLine($"ПОДЫТОГ: {(check.TotalAmount + check.DiscountAmount):N2}"); // Подытог = Итого + Скидка
+            sb.AppendLine($"ПОДЫТОГ: {(check.TotalAmount + check.DiscountAmount):N2}");
             if (check.DiscountAmount > 0)
             {
                 sb.AppendLine($"СКИДКА НА ЧЕК: {check.DiscountAmount:N2}");
@@ -189,12 +146,12 @@ namespace NexusPoint.BusinessLogic
                 sb.AppendLine($"  ПОЛУЧЕНО НАЛ: {check.CashPaid:C}");
             if (check.PaymentType == "Card" || check.PaymentType == "Mixed")
                 sb.AppendLine($"  ПОЛУЧЕНО КАРТОЙ: {check.CardPaid:C}");
-            if (change > 0.001m) // Печатаем сдачу, если она есть
+            if (change > 0.001m)
             {
                 sb.AppendLine($"СДАЧА: {change:C}");
             }
             sb.AppendLine("---------------------------------");
-            sb.AppendLine($"ФН: 999900001111222   ФД: {check.CheckId + 10000}  ФП: 1234567890"); // Пример
+            sb.AppendLine($"ФН: 999900001111222   ФД: {check.CheckId + 10000}  ФП: 1234567890");
             sb.AppendLine("--- Спасибо за покупку! ---");
 
             PrinterService.Print($"Чек №{check.CheckNumber}", sb.ToString());
