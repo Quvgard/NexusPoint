@@ -2,8 +2,6 @@
 using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -17,8 +15,6 @@ namespace NexusPoint.BusinessLogic
         {
             _discountRepository = discountRepository ?? throw new ArgumentNullException(nameof(discountRepository));
         }
-
-        // --- Получение данных ---
         public async Task<IEnumerable<Discount>> GetDiscountsAsync()
         {
             try
@@ -31,11 +27,8 @@ namespace NexusPoint.BusinessLogic
                 return new List<Discount>();
             }
         }
-
-        // --- Операции CRUD ---
         public bool AddDiscount(Discount discount)
         {
-            // Дополнительная валидация (если нужна, базовая делается в окне)
             try
             {
                 return _discountRepository.AddDiscount(discount) > 0;
@@ -49,7 +42,6 @@ namespace NexusPoint.BusinessLogic
 
         public bool UpdateDiscount(Discount discount)
         {
-            // Дополнительная валидация (если нужна)
             try
             {
                 return _discountRepository.UpdateDiscount(discount);
@@ -65,12 +57,10 @@ namespace NexusPoint.BusinessLogic
         {
             try
             {
-                // Показ подтверждения лучше делать в UI
                 return _discountRepository.DeleteDiscount(discountId);
             }
             catch (Exception ex)
             {
-                // TODO: Обработать FK ошибки, если скидка используется в CheckItems
                 MessageBox.Show($"Ошибка удаления акции: {ex.Message}\nВозможно, акция уже применена в каких-то чеках.", "Ошибка удаления", MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }

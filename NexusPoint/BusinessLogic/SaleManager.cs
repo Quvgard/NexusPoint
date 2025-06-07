@@ -1,13 +1,11 @@
 ﻿using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
-using NexusPoint.Windows;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -41,24 +39,20 @@ namespace NexusPoint.BusinessLogic
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _stockItemRepository = stockItemRepository ?? throw new ArgumentNullException(nameof(stockItemRepository));
             CurrentCheckItems = new ReadOnlyObservableCollection<CheckItemView>(_currentCheckItems);
-            _currentCheckItems.CollectionChanged += (s, e) => UpdateCheckoutButtonsState(); // Обновляем кнопки при изменении коллекции
+            _currentCheckItems.CollectionChanged += (s, e) => UpdateCheckoutButtonsState();
         }
-
-        // --- ДОБАВЛЕН ПРИВАТНЫЙ МЕТОД КОПИРОВАНИЯ ---
         private CheckItem CreateCleanCopy(CheckItemView originalView)
         {
-            // Создаем базовый CheckItem из CheckItemView
             return new CheckItem
             {
                 ProductId = originalView.ProductId,
                 Quantity = originalView.Quantity,
                 PriceAtSale = originalView.PriceAtSale,
-                DiscountAmount = 0m, // Сброс
-                AppliedDiscountId = null, // Сброс
-                ItemTotalAmount = Math.Round(originalView.Quantity * originalView.PriceAtSale, 2) // Начальная сумма
+                DiscountAmount = 0m,
+                AppliedDiscountId = null,
+                ItemTotalAmount = Math.Round(originalView.Quantity * originalView.PriceAtSale, 2)
             };
         }
-        // --- КОНЕЦ ДОБАВЛЕННОГО МЕТОДА ---
 
 
         public bool AddItem(string codeOrBarcode)
@@ -80,16 +74,10 @@ namespace NexusPoint.BusinessLogic
 
                 if (existingItem != null)
                 {
-                    // --- ИЗМЕНЕНИЕ: Вызываем PropertyChanged для Quantity ---
-                    existingItem.Quantity += 1; // INotifyPropertyChanged в CheckItemView обновит строку
-                    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+                    existingItem.Quantity += 1;
                 }
                 else
                 {
-                    // --- ИЗМЕНЕНИЕ: УБИРАЕМ ПОДПИСКУ ---
-                    // var newItem = new CheckItemView(...) // создаем как раньше
-                    // newItem.PropertyChanged += ItemView_PropertyChanged; // УБИРАЕМ ЭТУ СТРОКУ
-                    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
                     var newItem = new CheckItemView(
                         new CheckItem
                         {
@@ -134,12 +122,9 @@ namespace NexusPoint.BusinessLogic
                     return false;
                 }
             }
-
-            // --- ИЗМЕНЕНИЕ: Просто меняем свойство, INPC сделает остальное ---
             itemToChange.Quantity = newQuantity;
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
             _isManualDiscountApplied = false;
-            UpdateTotals(); // Обновляем общие итоги
+            UpdateTotals();
             return true;
         }
 
@@ -148,19 +133,13 @@ namespace NexusPoint.BusinessLogic
             if (itemToStorno == null || !_currentCheckItems.Contains(itemToStorno)) return false;
             if (quantityToStorno <= 0) return false;
 
-            // --- ИЗМЕНЕНИЕ: УБИРАЕМ ОТПИСКУ ---
-            // itemToStorno.PropertyChanged -= ItemView_PropertyChanged; // УБИРАЕМ
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
-
             if (quantityToStorno >= itemToStorno.Quantity)
             {
                 _currentCheckItems.Remove(itemToStorno);
             }
             else
             {
-                // --- ИЗМЕНЕНИЕ: Просто меняем свойство ---
                 itemToStorno.Quantity -= quantityToStorno;
-                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
             }
 
             _isManualDiscountApplied = false;
@@ -170,24 +149,17 @@ namespace NexusPoint.BusinessLogic
 
         public void ClearCheck()
         {
-            // --- ИЗМЕНЕНИЕ: УБИРАЕМ ОТПИСКУ ПЕРЕД ОЧИСТКОЙ ---
-            //foreach(var item in _currentCheckItems) item.PropertyChanged -= ItemView_PropertyChanged; // УБИРАЕМ
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
             _currentCheckItems.Clear();
             _isManualDiscountApplied = false;
             _lastAddedProduct = null;
             UpdateTotals();
             OnPropertyChanged(nameof(LastAddedProduct));
         }
-
-        // Метод расчета и применения авто-скидок
         public async Task<bool> CalculateAndApplyAutoDiscountsAsync()
         {
-            // --- ИЗМЕНЕНИЕ: Используем CreateCleanCopy(CheckItemView) ---
             List<CheckItem> originalItemsForCalc = _currentCheckItems
-                .Select(CreateCleanCopy) // Используем новый приватный метод
+                .Select(CreateCleanCopy)
                 .ToList();
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
             if (!originalItemsForCalc.Any()) return true;
 
@@ -223,13 +195,8 @@ namespace NexusPoint.BusinessLogic
                 return false;
             }
         }
-
-        // Приватный метод применения результата скидок
         private void ApplyDiscountResultInternal(DiscountCalculationResult discountResult)
         {
-            // --- ИЗМЕНЕНИЕ: УБИРАЕМ ОТПИСКУ ---
-            // foreach(var item in _currentCheckItems) item.PropertyChanged -= ItemView_PropertyChanged; // УБИРАЕМ
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
             _currentCheckItems.Clear();
             _isManualDiscountApplied = false;
             _lastAddedProduct = null;
@@ -248,65 +215,42 @@ namespace NexusPoint.BusinessLogic
                     productCache[item.ProductId] = product;
                 }
                 var viewItem = new CheckItemView(item, product);
-                // --- ИЗМЕНЕНИЕ: УБИРАЕМ ПОДПИСКУ ---
-                // viewItem.PropertyChanged += ItemView_PropertyChanged; // УБИРАЕМ
-                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
                 _currentCheckItems.Add(viewItem);
             }
 
             UpdateTotals();
             OnPropertyChanged(nameof(LastAddedProduct));
         }
-
-        // Публичный метод ApplyDiscountResult
         public void ApplyDiscountResult(DiscountCalculationResult discountResult) => ApplyDiscountResultInternal(discountResult);
-
-
-        // Применение ручной скидки
         public bool ApplyManualDiscount(decimal discountValue, bool isPercentage)
         {
             if (!_currentCheckItems.Any()) return false;
-
-            // --- ИЗМЕНЕНИЕ: Используем CreateCleanCopy(CheckItemView) ---
             List<CheckItem> itemsForManualDiscount = _currentCheckItems
-                .Select(CreateCleanCopy) // Используем новый приватный метод
+                .Select(CreateCleanCopy)
                 .ToList();
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
             decimal appliedAmount = DiscountCalculator.ApplyManualCheckDiscount(
                 itemsForManualDiscount, discountValue, isPercentage);
 
-            if (appliedAmount >= 0) // Применяем даже если скидка 0, чтобы сбросить авто-скидки
+            if (appliedAmount >= 0)
             {
-                // Обновляем CurrentCheckItems
-                // --- ИЗМЕНЕНИЕ: УБИРАЕМ ОТПИСКУ/ПОДПИСКУ ---
-                // foreach(var item in _currentCheckItems) item.PropertyChanged -= ItemView_PropertyChanged;
                 for (int i = 0; i < _currentCheckItems.Count; i++)
                 {
-                    // Считаем, что порядок совпадает
                     if (i < itemsForManualDiscount.Count)
                     {
-                        // Напрямую обновляем свойства view model из рассчитанной модели
                         _currentCheckItems[i].DiscountAmount = itemsForManualDiscount[i].DiscountAmount;
-                        _currentCheckItems[i].AppliedDiscountId = itemsForManualDiscount[i].AppliedDiscountId; // Должен быть null
+                        _currentCheckItems[i].AppliedDiscountId = itemsForManualDiscount[i].AppliedDiscountId;
                     }
                 }
-                // foreach(var item in _currentCheckItems) item.PropertyChanged += ItemView_PropertyChanged;
-                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-                _isManualDiscountApplied = (appliedAmount > 0); // Считаем ручной, только если скидка > 0
+                _isManualDiscountApplied = (appliedAmount > 0);
                 UpdateTotals();
                 return true;
             }
             return false;
         }
-
-        // Обновление кнопок (можно сделать публичным или вызываться из CashierWindow)
         internal void UpdateCheckoutButtonsState()
         {
-            // Здесь могла бы быть логика обновления IsEnabled для кнопок,
-            // но она пока осталась в CashierWindow.xaml.cs
-            // Вызываем PropertyChanged для HasItems, чтобы кнопки в UI могли обновиться
             OnPropertyChanged(nameof(HasItems));
         }
 

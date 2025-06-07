@@ -3,8 +3,6 @@ using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NexusPoint.Data.Repositories
 {
@@ -24,15 +22,13 @@ namespace NexusPoint.Data.Repositories
 
         public IEnumerable<Discount> GetDiscountsByIds(IEnumerable<int> discountIds)
         {
-            // Проверка на пустой список ID
             if (discountIds == null || !discountIds.Any())
             {
-                return Enumerable.Empty<Discount>(); // Возвращаем пустую коллекцию
+                return Enumerable.Empty<Discount>();
             }
 
             using (var connection = DatabaseHelper.GetConnection())
             {
-                // Используем оператор IN для выборки по списку ID
                 string query = "SELECT * FROM Discounts WHERE DiscountId IN @Ids";
                 return connection.Query<Discount>(query, new { Ids = discountIds });
             }
@@ -45,14 +41,11 @@ namespace NexusPoint.Data.Repositories
                 return connection.QueryFirstOrDefault<Discount>("SELECT * FROM Discounts WHERE DiscountId = @Id", new { Id = discountId });
             }
         }
-
-        // Получить все активные на текущий момент скидки
         public IEnumerable<Discount> GetAllActiveDiscounts()
         {
             using (var connection = DatabaseHelper.GetConnection())
             {
                 DateTime now = DateTime.Now;
-                // Выбираем активные, у которых дата старта прошла (или null), и дата окончания не наступила (или null)
                 string query = @"
                     SELECT * FROM Discounts
                     WHERE IsActive = 1

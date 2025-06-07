@@ -1,10 +1,6 @@
 ﻿using NexusPoint.Data.Repositories;
 using NexusPoint.Models;
-using NexusPoint.Utils;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -14,8 +10,8 @@ namespace NexusPoint.BusinessLogic
     {
         private readonly ShiftRepository _shiftRepository;
         private readonly CashDrawerOperationRepository _cashDrawerRepository;
-        private readonly ReportService _reportService; // Зависимость от ReportService для Z-отчета
-        private readonly UserRepository _userRepository; // Для Z-отчета
+        private readonly ReportService _reportService;
+        private readonly UserRepository _userRepository;
 
         public Shift CurrentOpenShift { get; private set; }
 
@@ -27,7 +23,7 @@ namespace NexusPoint.BusinessLogic
             _shiftRepository = shiftRepository ?? throw new ArgumentNullException(nameof(shiftRepository));
             _cashDrawerRepository = cashDrawerRepository ?? throw new ArgumentNullException(nameof(cashDrawerRepository));
             _reportService = reportService ?? throw new ArgumentNullException(nameof(reportService));
-            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository)); // Добавлено
+            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         }
 
         public void CheckCurrentShiftState()
@@ -38,7 +34,6 @@ namespace NexusPoint.BusinessLogic
             }
             catch (Exception ex)
             {
-                // Логирование или обработка ошибки загрузки
                 MessageBox.Show($"Критическая ошибка при проверке смены: {ex.Message}", "Ошибка смены", MessageBoxButton.OK, MessageBoxImage.Error);
                 CurrentOpenShift = null;
             }
@@ -65,7 +60,7 @@ namespace NexusPoint.BusinessLogic
             try
             {
                 CurrentOpenShift = _shiftRepository.OpenShift(openingUser.UserId, startCash);
-                ShiftOpened?.Invoke(this, EventArgs.Empty); // Уведомляем подписчиков
+                ShiftOpened?.Invoke(this, EventArgs.Empty);
                 return true;
             }
             catch (InvalidOperationException invEx)
@@ -100,21 +95,17 @@ namespace NexusPoint.BusinessLogic
 
             try
             {
-                // Сохраняем ID смены перед ее закрытием и обнулением
                 int shiftIdToClose = CurrentOpenShift.ShiftId;
-
-                // Закрываем смену в репозитории
                 bool closed = await Task.Run(() => _shiftRepository.CloseShift(shiftIdToClose, closingUser.UserId, endCashActual));
 
                 if (closed)
                 {
-                    // Получаем полные данные о только что закрытой смене
                     var closedShiftData = _shiftRepository.GetShiftById(shiftIdToClose);
 
-                    CurrentOpenShift = null; // Сбрасываем текущую открытую смену
-                    ShiftClosed?.Invoke(this, EventArgs.Empty); // Уведомляем подписчиков
+                    CurrentOpenShift = null;
+                    ShiftClosed?.Invoke(this, EventArgs.Empty);
 
-                    return closedShiftData; // Возвращаем объект с данными о закрытой смене
+                    return closedShiftData;
                 }
                 else
                 {
@@ -193,7 +184,7 @@ namespace NexusPoint.BusinessLogic
 
             try
             {
-                
+
                 decimal currentCash = await _reportService.CalculateCurrentCashInDrawerAsync(CurrentOpenShift);
 
                 if (amount > currentCash)

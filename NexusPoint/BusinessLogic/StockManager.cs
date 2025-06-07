@@ -3,14 +3,12 @@ using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 
 namespace NexusPoint.BusinessLogic
 {
-    // Модель для отображения остатков с деталями товара (переносим сюда из ManagerWindow)
-    public class StockItemView // Не наследуем INPC, т.к. ManagerWindow не требует динамического обновления строк
+    public class StockItemView
     {
         public int StockItemId { get; set; }
         public int ProductId { get; set; }
@@ -24,7 +22,7 @@ namespace NexusPoint.BusinessLogic
     public class StockManager
     {
         private readonly StockItemRepository _stockItemRepository;
-        private readonly ProductRepository _productRepository; // Нужен для получения деталей
+        private readonly ProductRepository _productRepository;
 
         public StockManager(StockItemRepository stockItemRepository, ProductRepository productRepository)
         {
@@ -36,13 +34,12 @@ namespace NexusPoint.BusinessLogic
         {
             try
             {
-                // Прямой вызов репозитория, т.к. дополнительной логики здесь нет
                 return _stockItemRepository.GetStockQuantity(productId);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка получения остатка для товара ID {productId}: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                return 0m; // Возвращаем 0 при ошибке
+                return 0m;
             }
         }
 
@@ -58,19 +55,15 @@ namespace NexusPoint.BusinessLogic
                     Quantity = si.Quantity,
                     LastUpdated = si.LastUpdated
                 }).ToList();
-
-                // Асинхронно подгружаем детали товаров
                 if (stockItemViews.Any())
                 {
                     await LoadProductDetailsForStockViewAsync(stockItemViews);
                 }
-
-                // Фильтрация (после загрузки деталей для поиска по имени/коду/штрихкоду)
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     string lowerSearchTerm = searchTerm.ToLowerInvariant();
                     stockItemViews = stockItemViews.Where(sv =>
-                        sv.ProductId.ToString() == searchTerm || // По ID
+                        sv.ProductId.ToString() == searchTerm ||
                         sv.ProductCode?.ToLowerInvariant().Contains(lowerSearchTerm) == true ||
                         sv.Barcode?.ToLowerInvariant().Contains(lowerSearchTerm) == true ||
                         sv.ProductName?.ToLowerInvariant().Contains(lowerSearchTerm) == true
@@ -115,9 +108,7 @@ namespace NexusPoint.BusinessLogic
             }
             catch (Exception ex)
             {
-                // Ошибку загрузки деталей можно не показывать пользователю, просто останутся "Загрузка..." или "<Н/Д>"
                 System.Diagnostics.Debug.WriteLine($"Error loading product details for stock view: {ex.Message}");
-                // Можно установить сообщение об ошибке в ProductName
                 foreach (var sv in stockViews.Where(s => s.ProductName == "Загрузка..."))
                 {
                     sv.ProductName = "<Ошибка загрузки>";
@@ -126,11 +117,9 @@ namespace NexusPoint.BusinessLogic
                 }
             }
         }
-
-        // Методы для корректировки (можно вынести в отдельный сервис, если логика сложная)
         public bool AdjustStockQuantity(int productId, decimal quantityChange, bool isAddition)
         {
-            if (quantityChange <= 0) // Количество для корректировки должно быть положительным
+            if (quantityChange <= 0)
             {
                 MessageBox.Show("Количество для приемки/списания должно быть положительным.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
@@ -138,10 +127,7 @@ namespace NexusPoint.BusinessLogic
 
             try
             {
-                // EnsureStockItemExists вызывается внутри репозитория при необходимости
                 decimal change = isAddition ? quantityChange : -quantityChange;
-
-                // Добавим проверку перед списанием
                 if (!isAddition)
                 {
                     decimal currentStock = _stockItemRepository.GetStockQuantity(productId);
@@ -170,7 +156,6 @@ namespace NexusPoint.BusinessLogic
             }
             try
             {
-                // EnsureStockItemExists вызывается внутри репозитория при необходимости
                 return _stockItemRepository.SetStockQuantity(productId, newQuantity);
             }
             catch (Exception ex)

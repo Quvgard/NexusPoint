@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.Entity;
-using System.Data.SQLite;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Data.SQLite;
 using System.IO;
+using System.Reflection;
 
 namespace NexusPoint.Data
 {
@@ -24,15 +18,13 @@ namespace NexusPoint.Data
         public static SQLiteConnection GetConnection()
         {
             var connection = new SQLiteConnection(connectionString);
-            // Включение поддержки внешних ключей для этого соединения
-            // Это важно для работы ON DELETE CASCADE и других ограничений FK
-            connection.Open(); // Откроем здесь, чтобы выполнить PRAGMA
+            connection.Open();
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "PRAGMA foreign_keys = ON;";
                 command.ExecuteNonQuery();
             }
-            connection.Close(); // Закроем обратно, Dapper сам откроет когда нужно
+            connection.Close();
             return connection;
         }
 
@@ -42,15 +34,12 @@ namespace NexusPoint.Data
             if (!File.Exists(dbPath))
             {
                 SQLiteConnection.CreateFile(dbPath);
-                DatabaseInitializer.CreateTables(); // Вызываем обновленный метод
+                DatabaseInitializer.CreateTables();
                 System.Diagnostics.Debug.WriteLine($"Database file created at: {dbPath}");
             }
             else
             {
                 System.Diagnostics.Debug.WriteLine($"Database file found at: {dbPath}");
-                // В реальном приложении здесь могла бы быть логика миграции схемы,
-                // но для начала просто проверяем/создаем.
-                // DatabaseInitializer.CreateTables(); // Можно вызывать всегда для IF NOT EXISTS
             }
         }
     }

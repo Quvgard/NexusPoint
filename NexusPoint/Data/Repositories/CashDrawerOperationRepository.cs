@@ -2,18 +2,13 @@
 using NexusPoint.Models;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NexusPoint.Data.Repositories
 {
     public class CashDrawerOperationRepository
     {
-        // Добавить операцию внесения/изъятия
         public int AddOperation(CashDrawerOperation operation)
         {
-            // Устанавливаем время операции, если оно не задано
             if (operation.Timestamp == default(DateTime))
             {
                 operation.Timestamp = DateTime.Now;
@@ -28,8 +23,6 @@ namespace NexusPoint.Data.Repositories
                 return connection.QuerySingle<int>(query, operation);
             }
         }
-
-        // Получить все операции для конкретной смены
         public IEnumerable<CashDrawerOperation> GetOperationsByShiftId(int shiftId)
         {
             using (var connection = DatabaseHelper.GetConnection())

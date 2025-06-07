@@ -1,21 +1,13 @@
 ﻿using NexusPoint.BusinessLogic;
 using NexusPoint.Data.Repositories;
-using NexusPoint.Models;
 using NexusPoint.Utils;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 
 namespace NexusPoint.Windows
 {
@@ -50,7 +42,7 @@ namespace NexusPoint.Windows
             catch (Exception ex) { ShowError($"Не удалось определить тек. смену: {ex.Message}"); }
 
             CheckNumberTextBox.Focus();
-            UpdateActionButtonsState(); // Кнопки изначально неактивны
+            UpdateActionButtonsState();
         }
 
         private async void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
@@ -65,7 +57,7 @@ namespace NexusPoint.Windows
 
         private async Task FindCheckAsync()
         {
-            ClearError(); ClearDisplay(); // ClearDisplay сбросит _selectedCheck в null
+            ClearError(); ClearDisplay();
             if (!int.TryParse(CheckNumberTextBox.Text, out int checkNumber) || checkNumber <= 0) { ShowError("Введите корректный номер чека."); return; }
             if (!int.TryParse(ShiftNumberTextBox.Text, out int shiftNumber) || shiftNumber <= 0) { ShowError("Введите корректный номер смены."); return; }
 
@@ -74,46 +66,36 @@ namespace NexusPoint.Windows
             if (foundCheckView == null)
             {
                 ShowError($"Чек №{checkNumber} в смене №{shiftNumber} не найден.");
-                // _selectedCheck уже null после ClearDisplay()
             }
             else
             {
                 ChecksListView.ItemsSource = new List<CheckDisplayView> { foundCheckView };
-                // --- ИЗМЕНЕНИЕ: Явно устанавливаем _selectedCheck и обновляем кнопки ---
                 ChecksListView.SelectedIndex = 0;
-                _selectedCheck = foundCheckView; // Устанавливаем выбранный чек
-                UpdateActionButtonsState();      // Обновляем состояние кнопок СРАЗУ
-                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+                _selectedCheck = foundCheckView;
+                UpdateActionButtonsState();
             }
         }
 
         private async void PrintLastCheckCopyButton_Click(object sender, RoutedEventArgs e)
         {
-            ClearError(); ClearDisplay(); // Сбрасываем предыдущий выбор
+            ClearError(); ClearDisplay();
 
             var lastCheckView = await _printingService.GetLastCheckAsync();
 
             if (lastCheckView == null)
             {
                 ShowError("Не найдено ни одного чека.");
-                // _selectedCheck уже null
-                UpdateActionButtonsState(); // Обновляем кнопки (будут неактивны)
+                UpdateActionButtonsState();
             }
             else
             {
                 ChecksListView.ItemsSource = new List<CheckDisplayView> { lastCheckView };
-                // --- ИЗМЕНЕНИЕ: Устанавливаем _selectedCheck и обновляем кнопки ДО печати ---
                 ChecksListView.SelectedIndex = 0;
-                _selectedCheck = lastCheckView; // Устанавливаем выбранный чек
-                UpdateActionButtonsState();     // Обновляем состояние кнопок
-
-                // Теперь можно безопасно вызвать печать
+                _selectedCheck = lastCheckView;
+                UpdateActionButtonsState();
                 await PrintSelectedCheckCopyAsync();
-                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
             }
         }
-
-        // Обновление состояния кнопок (без изменений в логике, но теперь вызывается корректно)
         private void UpdateActionButtonsState()
         {
             bool isCheckSelected = _selectedCheck != null;
@@ -122,16 +104,11 @@ namespace NexusPoint.Windows
             PrintTovarnyCheckButton.IsEnabled = isSaleCheckSelected;
             PrintDiscountDetailsButton.IsEnabled = isCheckSelected && _selectedCheck.DiscountAmount > 0;
         }
-
-        // Выбор чека в списке (без изменений)
         private void ChecksListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             _selectedCheck = ChecksListView.SelectedItem as CheckDisplayView;
-            UpdateActionButtonsState(); // Обновляем кнопки при ручном выборе
+            UpdateActionButtonsState();
         }
-
-
-        // --- Кнопки действий ---
         private async void PrintCopyButton_Click(object sender, RoutedEventArgs e)
         {
             await PrintSelectedCheckCopyAsync();
@@ -146,25 +123,21 @@ namespace NexusPoint.Windows
         {
             await PrintSelectedDiscountDetailsAsync();
         }
-
-
-        // --- Асинхронные методы печати (проверка _selectedCheck остается) ---
         private async Task PrintSelectedCheckCopyAsync()
         {
-            // Проверка _selectedCheck здесь все еще нужна на случай прямого вызова
             if (_selectedCheck != null)
             {
                 try
                 {
-                    ShowError("Формирование копии чека...", isInfo: true); // Инфо сообщение
+                    ShowError("Формирование копии чека...", isInfo: true);
                     string content = await _printingService.FormatCheckCopyAsync(_selectedCheck);
                     PrinterService.Print($"Копия чека №{_selectedCheck.CheckNumber}", content);
                     ShowError("Копия чека 'отправлена на печать'.", isInfo: true);
                 }
                 catch (Exception ex) { ShowError($"Ошибка печати копии: {ex.Message}"); }
-                finally { if (StatusText.Text == "Формирование копии чека...") ClearError(); } // Очищаем, если не было ошибки
+                finally { if (StatusText.Text == "Формирование копии чека...") ClearError(); }
             }
-            else { ShowError("Сначала найдите или выберите чек."); } // Это сообщение теперь не должно появляться для "Копии последнего"
+            else { ShowError("Сначала найдите или выберите чек."); }
         }
 
         private async Task PrintSelectedTovarnyCheckAsync()
@@ -200,14 +173,11 @@ namespace NexusPoint.Windows
             }
             else { ShowError("Сначала найдите или выберите чек."); }
         }
-
-
-        // --- Очистка и сообщения ---
         private void ClearDisplay()
         {
             ChecksListView.ItemsSource = null;
             _selectedCheck = null;
-            UpdateActionButtonsState(); // Обновляем кнопки при очистке
+            UpdateActionButtonsState();
         }
         private void ShowError(string message, bool isInfo = false) { StatusText.Text = message; StatusText.Foreground = isInfo ? System.Windows.Media.Brushes.Blue : System.Windows.Media.Brushes.Red; }
         private void ClearError() { StatusText.Text = string.Empty; }

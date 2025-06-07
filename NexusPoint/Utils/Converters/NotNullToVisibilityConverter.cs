@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Data;
 using System.Windows;
+using System.Windows.Data;
 
 namespace NexusPoint.Utils.Converters
 {
@@ -15,8 +11,6 @@ namespace NexusPoint.Utils.Converters
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             bool isNull = value == null;
-
-            // Обработка параметра для инвертирования
             bool invert = false;
             if (parameter is string strParam)
             {
@@ -34,7 +28,6 @@ namespace NexusPoint.Utils.Converters
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            // Обратное преобразование не имеет смысла для этого конвертера
             throw new NotImplementedException();
         }
     }
