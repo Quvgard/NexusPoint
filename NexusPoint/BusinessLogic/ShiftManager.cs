@@ -80,62 +80,57 @@ namespace NexusPoint.BusinessLogic
             }
         }
 
-        public async Task<bool> CloseShiftAsync(User closingUser, decimal endCashActual)
+        public async Task<Shift> CloseShiftAsync(User closingUser, decimal endCashActual)
         {
             if (CurrentOpenShift == null)
             {
                 MessageBox.Show("Нет открытой смены для закрытия.", "Информация", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                return null;
             }
             if (closingUser == null)
             {
                 MessageBox.Show("Ошибка: Не определен пользователь для закрытия смены.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                return false;
+                return null;
             }
             if (endCashActual < 0)
             {
                 MessageBox.Show("Фактическая сумма наличных не может быть отрицательной.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                return null;
             }
 
             try
             {
-                // Закрываем смену в репозитории (это рассчитает итоги)
-                bool closed = await Task.Run(() => _shiftRepository.CloseShift(CurrentOpenShift.ShiftId, closingUser.UserId, endCashActual));
+                // Сохраняем ID смены перед ее закрытием и обнулением
+                int shiftIdToClose = CurrentOpenShift.ShiftId;
+
+                // Закрываем смену в репозитории
+                bool closed = await Task.Run(() => _shiftRepository.CloseShift(shiftIdToClose, closingUser.UserId, endCashActual));
 
                 if (closed)
                 {
-                    var closedShiftData = _shiftRepository.GetShiftById(CurrentOpenShift.ShiftId);
-                    if (closedShiftData != null)
-                    {
-                        // Генерируем Z-отчет
-                        string zReport = await _reportService.GenerateZReportAsync(closedShiftData);
-                        PrinterService.Print($"Z-Отчет (Смена №{closedShiftData.ShiftNumber})", zReport);
-                    }
-                    else
-                    {
-                        MessageBox.Show("Не удалось получить данные закрытой смены для печати Z-отчета.", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
+                    // Получаем полные данные о только что закрытой смене
+                    var closedShiftData = _shiftRepository.GetShiftById(shiftIdToClose);
 
-                    CurrentOpenShift = null; // Сбрасываем текущую смену
-                    ShiftClosed?.Invoke(this, EventArgs.Empty); // Уведомляем
-                    return true;
+                    CurrentOpenShift = null; // Сбрасываем текущую открытую смену
+                    ShiftClosed?.Invoke(this, EventArgs.Empty); // Уведомляем подписчиков
+
+                    return closedShiftData; // Возвращаем объект с данными о закрытой смене
                 }
                 else
                 {
                     MessageBox.Show("Не удалось закрыть смену (возможно, она уже была закрыта или произошла ошибка).", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return false;
+                    return null;
                 }
             }
             catch (InvalidOperationException invEx)
             {
                 MessageBox.Show(invEx.Message, "Ошибка закрытия смены", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                return null;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка при закрытии смены: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                return false;
+                return null;
             }
         }
 
