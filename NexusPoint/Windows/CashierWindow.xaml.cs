@@ -717,30 +717,34 @@ namespace NexusPoint.Windows
 
         private async void CloseShiftMenuItem_Click(object sender, RoutedEventArgs e)
         {
+            // Проверяем, есть ли что закрывать
             if (_shiftManager.CurrentOpenShift == null) return;
 
-            var shiftToClose = _shiftManager.CurrentOpenShift;
-            if (shiftToClose == null) return; 
+            var endCashDialog = new InputDialog("Закрыть смену", $"Смена №{_shiftManager.CurrentOpenShift.ShiftNumber}\nВведите фактическую сумму наличных в кассе:", "0");
+            endCashDialog.Owner = this;
 
-            var endCashDialog = new InputDialog("Закрыть смену", $"Смена №{shiftToClose.ShiftNumber}\nВведите фактическую сумму наличных в кассе:", "0"); 
-            endCashDialog.Owner = this; 
-            if (endCashDialog.ShowDialog() == true && decimal.TryParse(endCashDialog.InputText, out decimal endCashActual)) 
+            if (endCashDialog.ShowDialog() == true && decimal.TryParse(endCashDialog.InputText, out decimal endCashActual))
             {
-                ShowTemporaryStatusMessage("Закрытие смены и формирование Z-отчета...", isInfo: true, durationSeconds: 15); 
-                bool closed = await _shiftManager.CloseShiftAsync(CurrentUser, endCashActual); 
-                ClearTemporaryStatusMessage(); 
+                ShowTemporaryStatusMessage("Закрытие смены и формирование Z-отчета...", isInfo: true, durationSeconds: 15);
 
-                if (closed)
+                // Вызываем обновленный метод, который вернет данные о закрытой смене
+                Shift closedShift = await _shiftManager.CloseShiftAsync(CurrentUser, endCashActual);
+
+                ClearTemporaryStatusMessage();
+
+                // Если метод вернул данные (т.е. смена успешно закрыта)
+                if (closedShift != null)
                 {
                     try
                     {
-                        string reportTitle = $"Z-Отчет (Смена №{shiftToClose.ShiftNumber})";
-                        string reportContent = await _reportService.GenerateZReportAsync(shiftToClose);
+                        string reportTitle = $"Z-Отчет (Смена №{closedShift.ShiftNumber})";
+                        // Используем полученный объект для генерации отчета
+                        string reportContent = await _reportService.GenerateZReportAsync(closedShift);
 
-                        // 1. Автоматически сохраняем в текстовый лог-файл
+                        // 1. Автоматически сохраняем в лог-файл
                         _fileReportLogger.AppendReportToFile(reportContent);
 
-                        // 2. Показываем отчет в новом окне
+                        // 2. Показываем отчет в нашем кастомном окне
                         var reportViewer = new ReportViewerWindow(reportTitle, reportContent);
                         reportViewer.Owner = this;
                         reportViewer.ShowDialog();
@@ -750,8 +754,9 @@ namespace NexusPoint.Windows
                         MessageBox.Show($"Смена закрыта, но произошла ошибка при формировании Z-отчета: {ex.Message}", "Ошибка отчета", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
 
-                    _saleManager.ClearCheck(); 
-                }       
+                    _saleManager.ClearCheck(); // Очищаем чек
+                }
+                // Если closedShift == null, значит, была ошибка, и сообщение об этом уже показано из ShiftManager.
             }
             else if (endCashDialog.DialogResult == true)
             {
